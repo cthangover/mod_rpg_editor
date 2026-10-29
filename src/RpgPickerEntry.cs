@@ -2,10 +2,10 @@ using Godot;
 
 namespace Cthangover.Tools.RpgEditor
 {
-    /// <summary>One row of an <see cref="RpgEntityPicker"/>: a character or an item of the game.</summary>
+    /// <summary>One row of an <see cref="RpgEntityPicker"/>: a character, item or map appearance.</summary>
     public class RpgPickerEntry
     {
-        /// <summary>Entity id (what <c>rpg.battle enemies=</c> or <c>item.add id=</c> takes).</summary>
+        /// <summary>Entity id for character/item entries; a charset path for appearance-only entries.</summary>
         public string Id { get; init; }
 
         /// <summary>Display name in the current language (the id when the entity has none).</summary>
@@ -16,5 +16,8 @@ namespace Cthangover.Tools.RpgEditor
 
         /// <summary>Picture of the row, or null.</summary>
         public Texture2D Icon { get; init; }
+
+        /// <summary>True for an entry-owned atlas preview; false for a texture borrowed from the window cache.</summary>
+        public bool OwnsIcon { get; init; }
     }
 }

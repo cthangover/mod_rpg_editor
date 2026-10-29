@@ -8,6 +8,37 @@ namespace Cthangover.Tools.RpgEditor.Tests
     {
         private static RpgMapDocument NewMap() => RpgMapDocument.Create("test_map", "village", 5, 4, 0);
 
+        [ModTest("document/rectangle_stamp_preserves_arrangement_and_undo")]
+        static void RectangleStampAndUndo(ModTestContext ctx)
+        {
+            var document = NewMap();
+            var stamp = new RpgTileStamp(2, 2, new[] { 64, 65, 67, 68 });
+            document.BeginChange();
+            ModAssert.Equal(4, document.Stamp(RpgEditLayer.Front, 1, 1, stamp), "the whole rectangle is placed");
+            ModAssert.Equal(64, document.Grid.GetTile(RpgLayer.Front, 1, 1), "top left");
+            ModAssert.Equal(65, document.Grid.GetTile(RpgLayer.Front, 2, 1), "top right");
+            ModAssert.Equal(67, document.Grid.GetTile(RpgLayer.Front, 1, 2), "bottom left");
+            ModAssert.Equal(68, document.Grid.GetTile(RpgLayer.Front, 2, 2), "bottom right");
+            ModAssert.Equal(0, document.Stamp(RpgEditLayer.Front, 1, 1, stamp), "unchanged cells are not edits");
+            ModAssert.True(document.Undo(), "one undo removes the entire group");
+            ModAssert.Equal(-1, document.Grid.GetTile(RpgLayer.Front, 2, 2), "the final group cell is undone too");
+            ModAssert.True(document.Redo(), "one redo restores the group");
+            var restored = RpgMapDocument.Load(document.ToJson());
+            ModAssert.Equal(68, restored.Grid.GetTile(RpgLayer.Front, 2, 2), "the group survives saving and loading");
+        }
+
+        [ModTest("document/stamp_skips_padding_and_clips_at_map_edges")]
+        static void StampGapsAndBounds(ModTestContext ctx)
+        {
+            var document = NewMap();
+            var stamp = new RpgTileStamp(2, 2, new[] { -1, 11, 12, 13 });
+            ModAssert.Equal(0, document.Stamp(RpgEditLayer.Main, 4, 3, stamp), "padding does not erase the destination and other cells clip");
+            ModAssert.Equal(2, document.Stamp(RpgEditLayer.Main, -1, 0, stamp), "partially off-map stamps clip without shifting");
+            ModAssert.Equal(11, document.Grid.GetTile(RpgLayer.Main, 0, 0), "top-right stamp cell reaches the map edge");
+            ModAssert.Equal(13, document.Grid.GetTile(RpgLayer.Main, 0, 1), "bottom-right cell retains its offset");
+            ModAssert.Equal(0, document.Stamp(RpgEditLayer.Collision, 0, 0, stamp), "a tile stamp never changes collision codes");
+        }
+
         [ModTest("document/create_fills_ground_and_centres_spawn")]
         static void CreateFillsGroundAndCentresSpawn(ModTestContext ctx)
         {

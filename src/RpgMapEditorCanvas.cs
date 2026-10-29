@@ -1,10 +1,12 @@
-using System;
-using Cthangover.Core.UI.Theming;
-using Cthangover.Mods.Rpg;
-using Godot;
-
 namespace Cthangover.Tools.RpgEditor
 {
+    using System;
+    using Cthangover.Core.UI.Theming;
+    using Cthangover.Mods.Rpg;
+    using Cthangover.Mods.TileRender;
+    using Cthangover.Core.Events;
+    using Godot;
+
     /// <summary>
     /// The map as the editor shows it: back, main and front tiles, the events
     /// (their charset frame or tile, else a marker), the spawn point, the
@@ -37,6 +39,13 @@ namespace Cthangover.Tools.RpgEditor
         private static readonly Color LockedModulate = new(1f, 1f, 1f, 0.55f);
 
         private readonly RpgTextures textures = new();
+        private ITileWorldPresentation preview;
+        private RpgRenderSceneBuilder builder;
+        private TileRenderScene previewScene;
+        private ITileProjection projection;
+        private RpgMapEditorOverlay overlay;
+        public string RendererId { get; private set; } = "topdown";
+        public ITileWorldPresentation Preview => preview;
         private Vector2I? hover;
         private bool stroking;
         private RpgMapEvent dragged;
@@ -62,6 +71,9 @@ namespace Cthangover.Tools.RpgEditor
 
         /// <summary>Atlas index the pencil and the fill put down.</summary>
         public int SelectedTile { get; set; }
+
+        /// <summary>Multi-cell brush selected in the object atlas; null uses SelectedTile.</summary>
+        public RpgTileStamp SelectedStamp { get; set; }
 
         /// <summary>Collision code the pencil and the fill put down.</summary>
         public char SelectedCollision { get; set; } = RpgCollision.Block;
@@ -99,11 +111,16 @@ namespace Cthangover.Tools.RpgEditor
         /// <summary>Creates the canvas; input comes through the GuiInput event.</summary>
         public RpgMapEditorCanvas()
         {
+            RendererId = Cthangover.Core.Games.ActiveGame.GetSetting("tile.renderer") ?? (TileRendererRegistry.Instance.Ids.Count == 1 ? TileRendererRegistry.Instance.Ids[0] : "topdown");
+            foreach (var arg in OS.GetCmdlineUserArgs())
+                if (arg.StartsWith("--editor-renderer=")) RendererId = arg.Substring(18);
             ClipContents = true;
             FocusMode = FocusModeEnum.Click;
             TextureFilter = TextureFilterEnum.Nearest;
             GuiInput += OnGuiInput;
             MouseExited += OnMouseExited;
+            overlay = new RpgMapEditorOverlay(this);
+            AddChild(overlay);
         }
 
         private float CellSize => (Tileset?.TileSize ?? 32) * Zoom;
@@ -115,160 +132,168 @@ namespace Cthangover.Tools.RpgEditor
             Refresh();
         }
 
-        /// <summary>Resizes to the map and redraws; call after any outside change.</summary>
+        public void SetRenderer(string id)
+        {
+            TileRendererRegistry.Instance.Resolve(id);
+            if (RendererId != id) { ReleasePreview(); projection = null; }
+            RendererId = id;
+            Refresh();
+        }
+
+        public override void _EnterTree()
+        {
+            TileRendererRegistry.Instance.Removing += OnRendererRemoving;
+            ModEventBus.Subscribe<ModSetReloadedEvent>(OnModsReloaded);
+        }
+        public override void _ExitTree()
+        {
+            TileRendererRegistry.Instance.Removing -= OnRendererRemoving;
+            ModEventBus.Unsubscribe<ModSetReloadedEvent>(OnModsReloaded);
+            ReleasePreview(); projection = null; builder?.Dispose(); textures.Dispose();
+        }
+
+        private void OnRendererRemoving(string id)
+        {
+            if (RendererId != id) return;
+            ReleasePreview(); projection = null;
+        }
+        private void OnModsReloaded(ModSetReloadedEvent evt)
+        {
+            if (!evt.Applied || Document == null) return;
+            ReleasePreview(); builder?.Dispose(); textures.Dispose();
+            Tileset = RpgTilesetFactory.Instance.Get(Document.Map.Tileset);
+            Refresh();
+        }
+
+        private void ReleasePreview()
+        {
+            preview?.Dispose();
+            preview = null;
+            previewScene?.Release();
+            previewScene = null;
+        }
+
+        /// <summary>The same renderer as runtime, with a static frame and authoring overlays.</summary>
         public void Refresh()
         {
-            var grid = Document?.Grid;
-            CustomMinimumSize = grid == null ? Vector2.Zero : new Vector2(grid.Width, grid.Height) * CellSize;
+            if (Document == null || Tileset == null) { ReleasePreview(); CustomMinimumSize = Vector2.Zero; QueueRedraw(); return; }
+            var factory = TileRendererRegistry.Instance.Resolve(RendererId);
+            projection = factory.Projection(Tileset.TileSize);
+            builder ??= new RpgRenderSceneBuilder(textures);
+            var previous = previewScene;
+            previewScene = builder.Build(Document.Map, Document.Grid, Tileset);
+            previewScene.Zoom = Zoom;
+            foreach (var visual in previewScene.Visuals)
+                visual.Tint = new Color(1, 1, 1, ActiveLayer <= RpgEditLayer.Front && visual.Layer != (int)ActiveLayer ? 0.45f : 1f);
+            if (preview == null)
+            {
+                preview = factory.Create();
+                AddChild(preview.Root);
+                MoveChild(preview.Root, 0);
+                preview.Mount(previewScene);
+            }
+            else preview.Apply(new TileSceneChanges { BaseRevision = previous.Revision, Scene = previewScene });
+            previous?.Release();
+            CustomMinimumSize = preview.ContentBounds.Size * Zoom;
+            preview.Resize(CustomMinimumSize);
+            var frame = new TileFrame { Ambient = Colors.White, Focus = new Vector2(Document.Grid.Width, Document.Grid.Height) / 2 };
+            foreach (var mapEvent in Document.LockedEvents) AddPreviewEvent(frame, builder, mapEvent, true);
+            foreach (var mapEvent in Document.Events) AddPreviewEvent(frame, builder, mapEvent, false);
+            preview.Present(frame, 0);
+            overlay.Position = preview.Root.Position;
+            overlay.Scale = preview.Root.Scale;
             QueueRedraw();
         }
 
-        /// <summary>Draws the map.</summary>
-        public override void _Draw()
+        private void AddPreviewEvent(TileFrame frame, RpgRenderSceneBuilder builder, RpgMapEvent mapEvent, bool locked)
         {
-            DrawRect(new Rect2(Vector2.Zero, Size), UiTokens.Surface0);
-            var grid = Document?.Grid;
-            if (grid == null)
-                return;
+            frame.Actors.Add(new TileActorPose { Id = (locked ? "locked/" : "own/") + mapEvent.Id,
+                Position = new Vector2(mapEvent.X, mapEvent.Y), Visible = true, Look = builder.EventLook(mapEvent, Tileset),
+                Facing = (int)mapEvent.Dir, Charset = !string.IsNullOrEmpty(mapEvent.Sprite), Tint = locked ? LockedModulate : Colors.White });
+        }
 
-            DrawRect(new Rect2(Vector2.Zero, new Vector2(grid.Width, grid.Height) * CellSize), Colors.Black);
-            DrawLayer(RpgLayer.Back);
-            DrawLayer(RpgLayer.Main);
-            DrawEvents();
-            DrawLayer(RpgLayer.Front);
-            DrawSpawn();
-            if (ActiveLayer == RpgEditLayer.Collision)
-                DrawCollision();
+        public new void QueueRedraw() { base.QueueRedraw(); overlay?.QueueRedraw(); }
+
+        public override void _Draw() => DrawRect(new Rect2(Vector2.Zero, Size), UiTokens.Surface0);
+
+        /// <summary>Mouse and automation coordinates use the real presentation transform, including negative iso X.</summary>
+        public Vector2 ProjectCell(Vector2 cell) => preview?.ProjectToView(new Vector3(cell.X, cell.Y, 0)) ?? cell * CellSize;
+
+        public void DrawOverlays(CanvasItem target)
+        {
+            if (Document == null || projection == null) return;
+            var grid = Document.Grid;
+            var unit = projection.Unit;
             if (ShowGrid)
-                DrawGrid();
-            if (hover.HasValue && grid.InBounds(hover.Value.X, hover.Value.Y))
-                DrawRect(CellRect(hover.Value.X, hover.Value.Y), UiTokens.AccentBright, false, 2f);
-        }
-
-        private void DrawLayer(RpgLayer layer)
-        {
-            if (Atlas == null || Tileset == null)
-                return;
-            var dim = ActiveLayer <= RpgEditLayer.Front && (int)ActiveLayer != (int)layer;
-            var modulate = new Color(1f, 1f, 1f, dim ? 0.45f : 1f);
-            var grid = Document.Grid;
-            for (var y = 0; y < grid.Height; y++)
             {
-                for (var x = 0; x < grid.Width; x++)
-                {
-                    var index = grid.GetTile(layer, x, y);
-                    if (index < 0)
-                        continue;
-                    // Autotiles are assembled from their neighbours exactly like in the game.
-                    var autotile = Tileset.AutotileOf(index);
-                    if (autotile == null)
-                        DrawTextureRectRegion(Atlas, CellRect(x, y), TileRegion(index), modulate);
-                    else if (textures.Tileset(autotile.Autotile) is { } block)
-                        RpgAutotiles.Draw(this, block, CellRect(x, y), RpgAutotiles.QuartersAt(grid, layer, x, y, index), Tileset.TileSize, modulate);
-                }
+                for (var x = 0; x <= grid.Width; x++) target.DrawLine(P(x, 0), P(x, grid.Height), GridColor);
+                for (var y = 0; y <= grid.Height; y++) target.DrawLine(P(0, y), P(grid.Width, y), GridColor);
             }
-        }
-
-        private void DrawEvents()
-        {
-            foreach (var mapEvent in Document.LockedEvents)
-                DrawEvent(mapEvent, true);
-            foreach (var mapEvent in Document.Events)
-                DrawEvent(mapEvent, false);
-        }
-
-        /// <summary>One event: its look, then on the events layer a frame (dashed grey for a locked one).</summary>
-        private void DrawEvent(RpgMapEvent mapEvent, bool locked)
-        {
-            var modulate = locked ? LockedModulate : Colors.White;
-            var rect = CellRect(mapEvent.X, mapEvent.Y);
-            var charset = string.IsNullOrEmpty(mapEvent.Sprite) ? null : textures.Charset(mapEvent.Sprite);
-            if (charset != null)
-            {
-                var frame = new Vector2(charset.GetWidth() / 3f, charset.GetHeight() / 4f);
-                var source = new Rect2(new Vector2(frame.X, frame.Y * (int)mapEvent.Dir), frame);
-                var size = frame * Zoom;
-                var target = new Rect2(rect.Position + new Vector2((rect.Size.X - size.X) / 2f, rect.Size.Y - size.Y), size);
-                DrawTextureRectRegion(charset, target, source, modulate);
-            }
-            else if (mapEvent.Tile >= 0 && Atlas != null && Tileset != null)
-            {
-                DrawTextureRectRegion(Atlas, rect, TileRegion(mapEvent.Tile), modulate);
-            }
-            else if (!string.IsNullOrEmpty(mapEvent.Icon) && textures.Icon(mapEvent.Icon) is { } icon)
-            {
-                // Fitted like RpgActor.UseIcon: three quarters of the cell, centred.
-                var fit = CellSize * 0.75f / Mathf.Max(1, Mathf.Max(icon.GetWidth(), icon.GetHeight()));
-                var size = icon.GetSize() * fit;
-                DrawTextureRect(icon, new Rect2(rect.GetCenter() - size / 2f, size), false, modulate);
-            }
-            else
-            {
-                DrawRect(rect.Grow(-CellSize * 0.15f), MarkerColor * modulate);
-            }
-
-            if (ActiveLayer == RpgEditLayer.Events && locked)
-                DrawDashedRect(rect.Grow(-1f));
-            else if (ActiveLayer == RpgEditLayer.Events)
-                DrawRect(rect, mapEvent == SelectedEvent ? UiTokens.AccentBright : UiTokens.Alpha(UiTokens.White, 0.5f), false, mapEvent == SelectedEvent ? 3f : 1f);
-        }
-
-        private void DrawDashedRect(Rect2 rect)
-        {
-            var color = UiTokens.Alpha(UiTokens.White, 0.6f);
-            DrawDashedLine(rect.Position, new Vector2(rect.End.X, rect.Position.Y), color, 1f, 4f);
-            DrawDashedLine(new Vector2(rect.End.X, rect.Position.Y), rect.End, color, 1f, 4f);
-            DrawDashedLine(rect.End, new Vector2(rect.Position.X, rect.End.Y), color, 1f, 4f);
-            DrawDashedLine(new Vector2(rect.Position.X, rect.End.Y), rect.Position, color, 1f, 4f);
-        }
-
-        private void DrawSpawn()
-        {
-            var spawn = Document.Map.Spawn;
-            if (spawn == null)
-                return;
-            var rect = CellRect(spawn.X, spawn.Y);
-            DrawCircle(rect.GetCenter(), CellSize * 0.18f, UiTokens.Ok);
-            DrawArc(rect.GetCenter(), CellSize * 0.18f, 0f, Mathf.Tau, 24, Colors.Black, 1.5f);
-        }
-
-        private void DrawCollision()
-        {
-            var grid = Document.Grid;
-            for (var y = 0; y < grid.Height; y++)
-            {
+            if (ActiveLayer == RpgEditLayer.Collision)
+                for (var y = 0; y < grid.Height; y++)
                 for (var x = 0; x < grid.Width; x++)
                 {
                     var code = grid.GetCollision(x, y);
-                    if (code == RpgCollision.Block)
-                        DrawRect(CellRect(x, y), BlockColor);
-                    else if (code == RpgCollision.Open)
-                        DrawRect(CellRect(x, y), OpenColor);
-                    else if (!RpgPassability.IsWalkable(grid, Tileset, x, y))
-                        DrawRect(CellRect(x, y).Grow(-CellSize * 0.35f), BlockColor);
+                    if (code == RpgCollision.Block || code == RpgCollision.Open || !RpgPassability.IsWalkable(grid, Tileset, x, y))
+                        target.DrawColoredPolygon(Polygon(x, y, 1, 1), code == RpgCollision.Open ? OpenColor : BlockColor);
                 }
+            foreach (var mapEvent in Document.LockedEvents) DrawEventMarker(target, mapEvent, true);
+            foreach (var mapEvent in Document.Events) DrawEventMarker(target, mapEvent, false);
+            if (Document.Map.Spawn is { } spawn)
+            {
+                var center = P(spawn.X + 0.5f, spawn.Y + 0.5f);
+                target.DrawCircle(center, unit * 0.18f, UiTokens.Ok);
+                target.DrawArc(center, unit * 0.18f, 0, Mathf.Tau, 24, Colors.Black);
             }
+            if (!hover.HasValue || !grid.InBounds(hover.Value.X, hover.Value.Y)) return;
+            var cell = hover.Value;
+            var stamp = SelectedStamp ?? RpgTileStamp.Single(SelectedTile);
+            if (!Placing && Tool == RpgEditTool.Pencil && ActiveLayer <= RpgEditLayer.Front && Atlas != null)
+                for (var y = 0; y < stamp.Height; y++)
+                for (var x = 0; x < stamp.Width; x++)
+                {
+                    var id = stamp.TileAt(x, y);
+                    if (id < 0) continue;
+                    var info = Tileset.TileOf(id);
+                    var texture = Atlas;
+                    var source = RpgRenderSceneBuilder.TileRegion(Tileset, id);
+                    if (info?.Surface is { } patch)
+                    {
+                        texture = textures.Tileset(Tileset.SurfaceImage);
+                        source = new Rect2(patch * Tileset.SurfaceSize + (cell.X + x) * Tileset.TileSize % Tileset.SurfaceSize,
+                            (cell.Y + y) * Tileset.TileSize % Tileset.SurfaceSize, Tileset.TileSize, Tileset.TileSize);
+                    }
+                    else if (!string.IsNullOrEmpty(info?.Autotile))
+                    {
+                        texture = textures.Autotile(info.Autotile, Tileset.TileSize, cell.X + x, cell.Y + y);
+                        source = RpgAutotiles.PreviewRect(Tileset.TileSize);
+                    }
+                    TileDrawing.Draw(target, new TileVisual { Texture = texture, Source = source,
+                        Bounds = new Rect2(cell.X + x, cell.Y + y, 1, 1) }, projection, new Color(1, 1, 1, 0.5f));
+                }
+            Outline(target, Polygon(cell.X, cell.Y, ActiveLayer <= RpgEditLayer.Front ? stamp.Width : 1,
+                ActiveLayer <= RpgEditLayer.Front ? stamp.Height : 1), UiTokens.AccentBright, false);
         }
 
-        private void DrawGrid()
+        private void DrawEventMarker(CanvasItem target, RpgMapEvent mapEvent, bool locked)
         {
-            var grid = Document.Grid;
-            var size = new Vector2(grid.Width, grid.Height) * CellSize;
-            for (var x = 0; x <= grid.Width; x++)
-                DrawLine(new Vector2(x * CellSize, 0f), new Vector2(x * CellSize, size.Y), GridColor);
-            for (var y = 0; y <= grid.Height; y++)
-                DrawLine(new Vector2(0f, y * CellSize), new Vector2(size.X, y * CellSize), GridColor);
+            var polygon = Polygon(mapEvent.X, mapEvent.Y, 1, 1);
+            if (string.IsNullOrEmpty(mapEvent.Sprite) && mapEvent.Tile < 0 && string.IsNullOrEmpty(mapEvent.Icon))
+                target.DrawColoredPolygon(polygon, MarkerColor);
+            if (ActiveLayer != RpgEditLayer.Events) return;
+            Outline(target, polygon, mapEvent == SelectedEvent ? UiTokens.AccentBright : UiTokens.Alpha(UiTokens.White, 0.6f), locked);
         }
-
-        private Rect2 CellRect(int x, int y) => new(new Vector2(x, y) * CellSize, new Vector2(CellSize, CellSize));
-
-        private Rect2 TileRegion(int index)
+        private static void Outline(CanvasItem target, Vector2[] polygon, Color color, bool dashed)
         {
-            var coords = RpgTileSetBuilder.AtlasCoords(Tileset, index);
-            return new Rect2(coords * Tileset.TileSize, new Vector2(Tileset.TileSize, Tileset.TileSize));
+            for (var i = 0; i < polygon.Length; i++)
+                if (dashed) target.DrawDashedLine(polygon[i], polygon[(i + 1) % polygon.Length], color, 1, 4);
+                else target.DrawLine(polygon[i], polygon[(i + 1) % polygon.Length], color, 1.5f);
         }
-
-        private Vector2I CellAt(Vector2 position) => new((int)Mathf.Floor(position.X / CellSize), (int)Mathf.Floor(position.Y / CellSize));
+        private Vector2 P(float x, float y) => TileDrawing.Project(projection, new Vector2(x, y));
+        private Vector2[] Polygon(int x, int y, int width, int height)
+            => TileDrawing.CellPolygon(projection, new Rect2(x, y, width, height));
+        private Vector2I CellAt(Vector2 position)
+            => preview != null && preview.TryPickGround(position, out var cell) ? cell : new Vector2I(-1, -1);
 
         private void OnGuiInput(InputEvent @event)
         {
@@ -391,8 +416,13 @@ namespace Cthangover.Tools.RpgEditor
         {
             var tile = erase ? -1 : SelectedTile;
             var collision = erase ? RpgCollision.Auto : SelectedCollision;
-            if (Document.Paint(ActiveLayer, cell.X, cell.Y, tile, collision))
-                QueueRedraw();
+            var changed = !erase && ActiveLayer <= RpgEditLayer.Front && SelectedStamp != null
+                ? Document.Stamp(ActiveLayer, cell.X, cell.Y, SelectedStamp) > 0
+                : Document.Paint(ActiveLayer, cell.X, cell.Y, tile, collision);
+            if (changed)
+            {
+                Refresh();
+            }
         }
 
         private void Drag(Vector2I cell)
@@ -406,6 +436,7 @@ namespace Cthangover.Tools.RpgEditor
             }
             dragged.X = cell.X;
             dragged.Y = cell.Y;
+            Refresh();
             EventSelected?.Invoke(dragged);
         }
 

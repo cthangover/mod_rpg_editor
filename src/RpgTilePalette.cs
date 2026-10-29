@@ -17,7 +17,8 @@ namespace Cthangover.Tools.RpgEditor
     /// </summary>
     public partial class RpgTilePalette : Control
     {
-        private const float Scale = 1.5f;
+        // Keep wide architectural blocks fully visible in the standard sidebar.
+        private float Scale => tileset == null ? 1.5f : Math.Min(1.5f, 384f / Math.Max(1, tileset.Columns * tileset.TileSize));
         private const float CodeHeight = 44f;
         private const float AutotileGap = 8f;
 
@@ -28,6 +29,15 @@ namespace Cthangover.Tools.RpgEditor
         private RpgTileset tileset;
         private Texture2D atlas;
         private bool collisionMode;
+        private Vector2I? selectionStart;
+        private Rect2I? selection;
+        private bool dragged;
+
+        /// <summary>The current rectangular brush in logical map ids.</summary>
+        public RpgTileStamp SelectedStamp { get; private set; } = RpgTileStamp.Single(0);
+
+        /// <summary>A dragged rectangle changed the whole brush.</summary>
+        public event Action<RpgTileStamp> StampSelected;
 
         /// <summary>Selected atlas index.</summary>
         public int SelectedTile { get; private set; }
@@ -54,15 +64,18 @@ namespace Cthangover.Tools.RpgEditor
         {
             tileset = value;
             atlas = image;
+            selection = null;
+            selectionStart = null;
             autotiles.Clear();
             if (value != null)
-                autotiles.AddRange(value.Tiles.Where(t => !string.IsNullOrEmpty(t.Autotile)));
+                autotiles.AddRange(value.Tiles.Where(t => !string.IsNullOrEmpty(t.Autotile) || t.Surface != null));
             Relayout();
         }
 
         /// <summary>Switches between the tile atlas and the collision codes.</summary>
         public void SetCollisionMode(bool value)
         {
+            selectionStart = null;
             collisionMode = value;
             Relayout();
         }
@@ -71,6 +84,9 @@ namespace Cthangover.Tools.RpgEditor
         public void Select(int index)
         {
             SelectedTile = index;
+            SelectedStamp = RpgTileStamp.Single(index);
+            selection = null;
+            selectionStart = null;
             QueueRedraw();
         }
 
@@ -88,18 +104,24 @@ namespace Cthangover.Tools.RpgEditor
 
             var cell = tileset.TileSize * Scale;
             DrawTextureRect(atlas, new Rect2(Vector2.Zero, atlas.GetSize() * Scale), false);
-            foreach (var tile in tileset.Tiles.Where(t => t.Solid && string.IsNullOrEmpty(t.Autotile)))
+            foreach (var tile in tileset.Tiles.Where(t => t.Solid && string.IsNullOrEmpty(t.Autotile) && t.Surface == null))
                 DrawSolidMark((Vector2)RpgTileSetBuilder.AtlasCoords(tileset, tile.Index) * cell, cell);
             for (var i = 0; i < autotiles.Count; i++)
             {
-                if (textures.Tileset(autotiles[i].Autotile) is { } block)
+                if (autotiles[i].Surface is { } patch && textures.Tileset(tileset.SurfaceImage) is { } surface)
+                    DrawTextureRectRegion(surface, new Rect2(Slot(i), new Vector2(cell, cell)),
+                        new Rect2(patch * tileset.SurfaceSize, 0, tileset.TileSize, tileset.TileSize));
+                else if (textures.Tileset(autotiles[i].Autotile) is { } block)
                     DrawTextureRectRegion(block, new Rect2(Slot(i), new Vector2(cell, cell)), RpgAutotiles.PreviewRect(tileset.TileSize));
                 if (autotiles[i].Solid)
                     DrawSolidMark(Slot(i), cell);
             }
             var slot = autotiles.FindIndex(t => t.Index == SelectedTile);
             var selected = slot >= 0 ? Slot(slot) : (Vector2)RpgTileSetBuilder.AtlasCoords(tileset, SelectedTile) * cell;
-            DrawRect(new Rect2(selected, new Vector2(cell, cell)), UiTokens.AccentBright, false, 3f);
+            var highlight = selection is { } rectangle
+                ? new Rect2((Vector2)rectangle.Position * cell, (Vector2)rectangle.Size * cell)
+                : new Rect2(selected, new Vector2(cell, cell));
+            DrawRect(highlight, UiTokens.AccentBright, false, 3f);
         }
 
         private void DrawSolidMark(Vector2 position, float cell)
@@ -135,7 +157,17 @@ namespace Cthangover.Tools.RpgEditor
         {
             if (@event is InputEventMouseMotion motion && !collisionMode && tileset != null)
             {
+                if (selectionStart.HasValue && (dragged || AtlasCellAt(motion.Position) != selectionStart.Value))
+                {
+                    dragged = true;
+                    SelectRectangle(motion.Position);
+                }
                 TooltipText = Describe(IndexAt(motion.Position));
+                return;
+            }
+            if (@event is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
+            {
+                selectionStart = null;
                 return;
             }
             if (@event is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } button)
@@ -153,14 +185,61 @@ namespace Cthangover.Tools.RpgEditor
             else if (tileset != null && atlas != null)
             {
                 var index = IndexAt(button.Position);
-                if (index >= 0 && (index < RpgTileSetBuilder.TileCount(tileset, atlas) || tileset.AutotileOf(index) != null))
+                if (index >= 0 && (index < RpgTileSetBuilder.TileCount(tileset, atlas) || tileset.TileOf(index) != null))
                 {
                     SelectedTile = index;
+                    SelectedStamp = RpgTileStamp.Single(index);
+                    selection = null;
+                    selectionStart = button.Position.Y < atlas.GetHeight() * Scale
+                        ? AtlasCellAt(button.Position) : null;
+                    dragged = false;
+                    SelectGroupOf(index);
                     TileSelected?.Invoke(index);
+                    StampSelected?.Invoke(SelectedStamp);
                 }
             }
             QueueRedraw();
             AcceptEvent();
+        }
+
+        /// <summary>
+        /// A click on any cell of a visual group picks the whole object, so it is stamped complete: a partial
+        /// pattern does not match the group and the isometric view falls back to separate per-cell sprites.
+        /// </summary>
+        private void SelectGroupOf(int index)
+        {
+            var group = tileset.VisualGroups?.Find(g => g.Pattern != null && Array.IndexOf(g.Pattern, index) >= 0);
+            if (group == null || RpgVisualGroupValidator.Error(group) != null)
+                return;
+            SelectedStamp = new RpgTileStamp(group.Width, group.Height, group.Pattern);
+            SelectedTile = group.Pattern[0];
+            var origin = RpgTileSetBuilder.AtlasCoords(tileset, group.Pattern[0]);
+            var packed = true;
+            for (var y = 0; y < group.Height; y++)
+                for (var x = 0; x < group.Width; x++)
+                    packed &= RpgTileSetBuilder.AtlasCoords(tileset, group.Pattern[y * group.Width + x]) == origin + new Vector2I(x, y);
+            selection = packed ? new Rect2I(origin, group.Width, group.Height) : null;
+        }
+
+        private Vector2I AtlasCellAt(Vector2 position)
+        {
+            var cell = tileset.TileSize * Scale;
+            return new Vector2I(Math.Clamp((int)(position.X / cell), 0, tileset.Columns - 1),
+                Math.Clamp((int)(position.Y / cell), 0, atlas.GetHeight() / tileset.TileSize - 1));
+        }
+
+        private void SelectRectangle(Vector2 position)
+        {
+            var end = AtlasCellAt(position);
+            var start = selectionStart.Value;
+            var left = Math.Min(start.X, end.X);
+            var top = Math.Min(start.Y, end.Y);
+            selection = new Rect2I(left, top, Math.Abs(start.X - end.X) + 1, Math.Abs(start.Y - end.Y) + 1);
+            SelectedStamp = RpgTileStamp.FromAtlas(tileset, selection.Value);
+            SelectedTile = SelectedStamp.TileAt(0, 0);
+            TileSelected?.Invoke(SelectedTile);
+            StampSelected?.Invoke(SelectedStamp);
+            QueueRedraw();
         }
 
         private float AutotileTop => atlas == null ? 0f : atlas.GetHeight() * Scale + (autotiles.Count > 0 ? AutotileGap : 0f);
@@ -184,7 +263,11 @@ namespace Cthangover.Tools.RpgEditor
             }
             var column = (int)(position.X / cell);
             var row = (int)(position.Y / cell);
-            return column < 0 || column >= tileset.Columns || row < 0 ? -1 : row * tileset.Columns + column;
+            if (column < 0 || column >= tileset.Columns || row < 0 || position.Y >= atlas.GetHeight() * Scale)
+                return -1;
+            var physical = row * tileset.Columns + column;
+            return tileset.Tiles.FirstOrDefault(t => t.AtlasIndex == physical)?.Index
+                ?? (tileset.Tiles.Any(t => t.AtlasIndex != null) ? -1 : physical);
         }
 
         private string Describe(int index)

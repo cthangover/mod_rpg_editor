@@ -40,7 +40,8 @@ namespace Cthangover.Tools.RpgEditor
             Id = info.ID,
             Name = string.IsNullOrEmpty(info.Name) ? info.ID : TranslationServer.Translate(info.Name).ToString(),
             Look = charset,
-            Icon = FrontFrame(charset == null ? null : textures.Charset(charset))
+            Icon = FrontFrame(charset == null ? null : textures.Charset(charset)),
+            OwnsIcon = true
         };
 
         private static string CharsetOf(CharacterInfo info, HashSet<string> charsets)
@@ -54,7 +55,7 @@ namespace Cthangover.Tools.RpgEditor
             return candidates.FirstOrDefault(path => !string.IsNullOrEmpty(path) && charsets.Contains(path));
         }
 
-        private static Texture2D FrontFrame(Texture2D image)
+        internal static Texture2D FrontFrame(Texture2D image)
         {
             if (image == null)
                 return null;

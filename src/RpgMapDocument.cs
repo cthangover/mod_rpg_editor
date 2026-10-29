@@ -146,6 +146,22 @@ namespace Cthangover.Tools.RpgEditor
             return true;
         }
 
+        /// <summary>Places a rectangular selection, skipping padding and clipping at map edges; one history step is recorded by the caller.</summary>
+        public int Stamp(RpgEditLayer layer, int x, int y, RpgTileStamp stamp)
+        {
+            if (layer > RpgEditLayer.Front || stamp == null)
+                return 0;
+            var changed = 0;
+            for (var sy = 0; sy < stamp.Height; sy++)
+                for (var sx = 0; sx < stamp.Width; sx++)
+                {
+                    var tile = stamp.TileAt(sx, sy);
+                    if (tile >= 0 && Paint(layer, x + sx, y + sy, tile, RpgCollision.Auto))
+                        changed++;
+                }
+            return changed;
+        }
+
         /// <summary>
         /// Flood-fills (4-neighbourhood) the area of cells equal to the start
         /// cell with a tile or a collision code. Returns the number of cells changed.

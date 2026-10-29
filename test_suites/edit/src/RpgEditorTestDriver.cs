@@ -18,11 +18,12 @@ namespace Cthangover.Tools.RpgEditor.Tests
     /// buttons are pressed, the palette and the canvas get mouse events through
     /// their <c>gui_input</c> signal, Ctrl+Z goes into the window, a slime found in
     /// the characters tab is placed as an enemy and branches from the items tab as
-    /// a pickup. That window is
+    /// a pickup. The appearance tab exposes all NPC artwork, places an elder without
+    /// a combat entity and supports undo/redo. That window is
     /// freed without saving, so the demo maps never change. A second window then
     /// creates a new map through the file selector's "+" and saves it: the game must
     /// know the map's scene and its event (saved apart, into map_events) at once,
-    /// with no mod reload; its files are deleted again.
+    /// with no mod reload, including a seer placed from the appearance tab; its files are deleted again.
     /// Result line: <c>[TEST_RESULT] name=rpg_editor_edit passed=N failed=M</c>.
     /// </summary>
     public partial class RpgEditorTestDriver : Node
@@ -46,6 +47,8 @@ namespace Cthangover.Tools.RpgEditor.Tests
         private RpgMapEditorCanvas canvas;
         private int eventsBefore;
         private string newMapMod;
+        private Texture2D closingPreview;
+        private Texture2D closingSource;
 
         /// <summary>Creates the driver; <paramref name="shotsDir"/> null disables screenshots.</summary>
         public RpgEditorTestDriver(string shotsDir)
@@ -122,21 +125,31 @@ namespace Cthangover.Tools.RpgEditor.Tests
                     Check(window.Title.StartsWith("* "), "the window is marked dirty");
                     window.PushInput(new InputEventKey { Keycode = Key.Z, PhysicalKeycode = Key.Z, CtrlPressed = true, Pressed = true });
                     Check(canvas.Document.Grid.GetTile(RpgLayer.Main, PaintCell.X, PaintCell.Y) == before, "Ctrl+Z undoes the stroke");
+                    PrepareStampPreview();
+                    step = 20;
+                    return;
+                case 20:
+                    Shot("stamp_preview");
+                    PlaceStampAndUndo();
                     Press("tools/rpg_editor/layer_events");
                     eventsBefore = canvas.Document.Events.Count;
                     ClickCanvas(EventCell, true);
                     Check(canvas.Document.Events.Count == eventsBefore + 1 && canvas.SelectedEvent != null, "a double click adds and selects an event");
-                    step++;
+                    step = 3;
                     return;
                 case 3:
                     // Screenshots one tick after the action, when the frame shows it.
                     Shot("events");
                     PlaceSlime();
+                    PlaceAppearance();
                     Press("tools/rpg_editor/layer_collision");
                     step++;
                     return;
                 case 4:
                     Shot("collision");
+                    Shot("appearances");
+                    closingPreview = window.FindChildren("*", "", true, false).OfType<RpgEntityPicker>().First(p => p.Name == "Appearances").Selected?.Icon;
+                    closingSource = (closingPreview as AtlasTexture)?.Atlas;
                     window.QueueFree();
                     window = ToolWindow.Open<RpgMapEditorWindow>();
                     step++;
@@ -145,6 +158,8 @@ namespace Cthangover.Tools.RpgEditor.Tests
                     canvas = window.FindChildren("*", "", true, false).OfType<RpgMapEditorCanvas>().FirstOrDefault();
                     if (canvas?.Document == null)
                         return;
+                    Check(closingPreview != null && !GodotObject.IsInstanceValid(closingPreview), "closing the editor releases the picker preview");
+                    Check(closingSource != null && !GodotObject.IsInstanceValid(closingSource), "closing the editor releases the source texture cache");
                     newMapMod = Selector().CurrentMod;
                     DeleteNewMapFiles();
                     Selector().FindChildren("*", "", true, false).OfType<Button>().First(b => b.Text == "+").EmitSignal(BaseButton.SignalName.Pressed);
@@ -164,11 +179,19 @@ namespace Cthangover.Tools.RpgEditor.Tests
                     try
                     {
                         canvas.Document.AddEvent(1, 1).Sprite = "village/elder";
+                        var appearance = Pick("Appearances", 3, "seer", "rpg_plus/seer");
+                        if (appearance != null)
+                        {
+                            Press("tools/rpg_editor/place_appearance");
+                            ClickCanvas(new Vector2I(2, 2), false);
+                        }
                         Press("tools/common/save");
                         Check(File.Exists(ModFileService.GetWritablePath(newMapMod, "scenes/" + NewMap + ".json")), "the first save of a new map writes its scene");
                         Check(!ModFileService.ReadText(newMapMod, "maps/" + NewMap + ".json").Contains("\"Events\""), "the map file holds no events");
                         Check(RpgMapEvents.Of(NewMap).Any(e => e.Id == "event_1" && e.ModId == newMapMod && e.File == RpgMapDocument.EventsPath(NewMap)),
                             "the event is saved into map_events and the game reads it at once");
+                        Check(RpgMapEvents.Of(NewMap).Any(e => e.Sprite == "rpg_plus/seer" && e.X == 2 && e.Y == 2 && (e.Commands == null || e.Commands.Count == 0)),
+                            "an appearance without a character entity saves and reloads as an NPC");
                         Check(GetTree().Root.GetNodeOrNull<SceneManager>("SceneManager")?.HasScene(NewMap) == true, "the game knows the new map's scene without a mod reload");
                     }
                     finally
@@ -216,7 +239,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
         /// <summary>Opens the side tab, types the query, checks every row matches it and selects <paramref name="id"/>; null when it is not listed.</summary>
         private RpgEntityPicker Pick(string name, int tab, string query, string id)
         {
-            window.FindChildren("*", "", true, false).OfType<TabContainer>().First(t => t.GetTabCount() == 3).CurrentTab = tab;
+            window.FindChildren("*", "", true, false).OfType<TabContainer>().First(t => t.GetNodeOrNull<RpgEntityPicker>("Characters") != null).CurrentTab = tab;
             var picker = window.FindChildren("*", "", true, false).OfType<RpgEntityPicker>().First(p => p.Name == name);
             var search = picker.FindChildren("*", "", true, false).OfType<LineEdit>().First(e => e.GetParent() == picker);
             search.Text = query;
@@ -234,6 +257,39 @@ namespace Cthangover.Tools.RpgEditor.Tests
             }
             Fail($"'{id}' is not in the {name} list");
             return null;
+        }
+
+        private void PlaceAppearance()
+        {
+            var expected = new[] { "village/hero", "village/slime", "village/wolf", "village/elder", "village/merchant", "village/villager", "rpg_plus/trainer", "rpg_plus/seer" };
+            using var appearanceTextures = new RpgTextures();
+            var entries = RpgAppearanceCatalog.Load(appearanceTextures);
+            Check(entries.Count == expected.Length && expected.All(path => entries.Any(e => e.Look == path && e.Icon != null)),
+                "all eight appearances have previews, including NPCs without character entities");
+            foreach (var entry in entries.Where(e => e.OwnsIcon))
+                entry.Icon?.Dispose();
+            var picker = Pick("Appearances", 3, "elder", "village/elder");
+            if (picker == null) return;
+            var count = canvas.Document.Events.Count;
+            Press("tools/rpg_editor/place_appearance");
+            ClickCanvas(new Vector2I(6, 6), false);
+            var placed = canvas.SelectedEvent;
+            Check(canvas.Document.Events.Count == count+1 && placed?.Sprite == "village/elder" && placed.X == 6 && placed.Y == 6,
+                "the elder appearance is placed through the picker and canvas");
+            Check(placed?.Id.StartsWith("npc_") == true && placed.Scenario == null && placed.Condition == null && (placed.Commands == null || placed.Commands.Count == 0),
+                "a visual NPC has a safe event id and no fabricated battle enemy");
+            window.PushInput(new InputEventKey { Keycode = Key.Z, PhysicalKeycode = Key.Z, CtrlPressed = true, Pressed = true });
+            Check(canvas.Document.Events.Count == count, "undo removes the appearance placement");
+            window.PushInput(new InputEventKey { Keycode = Key.Y, PhysicalKeycode = Key.Y, CtrlPressed = true, Pressed = true });
+            Check(canvas.Document.Events.Count == count+1 && canvas.Document.Events.Any(e => e.Sprite == "village/elder" && e.X == 6 && e.Y == 6),
+                "redo restores the appearance placement");
+            Pick("Appearances", 3, "", "village/elder");
+            var previousPreview = picker.Selected?.Icon;
+            picker.Reload();
+            Check(previousPreview != null && !GodotObject.IsInstanceValid(previousPreview) && picker.Selected?.Id == "village/elder" && GodotObject.IsInstanceValid(picker.Selected?.Icon),
+                "reloading releases the old preview and preserves a valid selected appearance");
+            Check(picker.FindChildren("*", "", true, false).OfType<ItemList>().First().ItemCount == expected.Length,
+                "reloading the appearance tab keeps all eight rows without duplicates");
         }
 
         private ModFileSelector Selector() => window.FindChildren("*", "", true, false).OfType<ModFileSelector>().First();
@@ -269,14 +325,43 @@ namespace Cthangover.Tools.RpgEditor.Tests
             var palette = window.FindChildren("*", "", true, false).OfType<RpgTilePalette>().First();
             var tileset = canvas.Tileset;
             var cell = palette.Size.X / tileset.Columns;
-            var position = new Vector2(index % tileset.Columns + 0.5f, index / tileset.Columns + 0.5f) * cell;
+            var position = ((Vector2)RpgTileSetBuilder.AtlasCoords(tileset, index) + new Vector2(0.5f, 0.5f)) * cell;
             palette.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = position });
+            palette.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = position });
+        }
+
+        private void PrepareStampPreview()
+        {
+            var palette = window.FindChildren("*", "", true, false).OfType<RpgTilePalette>().First();
+            var cell = palette.Size.X / canvas.Tileset.Columns;
+            var start = ((Vector2)RpgTileSetBuilder.AtlasCoords(canvas.Tileset, 64) + new Vector2(0.5f, 0.5f)) * cell;
+            var end = start + new Vector2(cell, cell);
+            palette.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = start });
+            palette.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseMotion { Position = end, ButtonMask = MouseButtonMask.Left });
+            palette.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = end });
+            Check(canvas.SelectedStamp?.Width == 2 && canvas.SelectedStamp.Height == 2, "dragging the palette selects a two-by-two brush");
+            Check(canvas.SelectedStamp?.TileAt(1, 1) == 68, "the selected rectangle preserves object tile arrangement");
+            var size = canvas.Tileset.TileSize * canvas.Zoom;
+            canvas.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseMotion { Position = canvas.ProjectCell((Vector2)PaintCell + new Vector2(0.5f, 0.5f)) });
+        }
+
+        private void PlaceStampAndUndo()
+        {
+            var before = canvas.Document.ToJson();
+            ClickCanvas(PaintCell, false);
+            Check(canvas.Document.Grid.GetTile(RpgLayer.Main, PaintCell.X, PaintCell.Y) == 64
+                && canvas.Document.Grid.GetTile(RpgLayer.Main, PaintCell.X + 1, PaintCell.Y) == 65
+                && canvas.Document.Grid.GetTile(RpgLayer.Main, PaintCell.X, PaintCell.Y + 1) == 67
+                && canvas.Document.Grid.GetTile(RpgLayer.Main, PaintCell.X + 1, PaintCell.Y + 1) == 68,
+                "one canvas click places every cell of the rectangular brush");
+            window.PushInput(new InputEventKey { Keycode = Key.Z, PhysicalKeycode = Key.Z, CtrlPressed = true, Pressed = true });
+            Check(canvas.Document.ToJson() == before, "one undo restores the whole map before the group stamp");
         }
 
         private void ClickCanvas(Vector2I cell, bool doubleClick)
         {
             var size = canvas.Tileset.TileSize * canvas.Zoom;
-            var position = new Vector2(cell.X + 0.5f, cell.Y + 0.5f) * size;
+            var position = canvas.ProjectCell(new Vector2(cell.X + 0.5f, cell.Y + 0.5f));
             canvas.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, DoubleClick = doubleClick, Position = position });
             canvas.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = position });
         }
@@ -308,9 +393,16 @@ namespace Cthangover.Tools.RpgEditor.Tests
             ViewportCapture.SavePng(GetViewport(), shotsDir.TrimEnd('/') + "/rpg_editor_" + name + ".png");
         }
 
-        private void Finish()
+        private async void Finish()
         {
+            if (step < 0)
+                return;
             step = -1;
+            if (GodotObject.IsInstanceValid(window) && !window.IsQueuedForDeletion())
+                window.QueueFree();
+            // Allow queued windows and their render resources to leave the tree before quitting.
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             GameLogger.Log("TEST", $"[TEST_RESULT] name=rpg_editor_edit passed={passed} failed={failures.Count}");
             GetTree().Quit(failures.Count == 0 ? 0 : 1);
         }

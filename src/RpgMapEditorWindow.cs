@@ -10,6 +10,7 @@ using Cthangover.Core.Utils;
 using Cthangover.Mods.Interface.Theming;
 using Cthangover.Mods.Interface.Tool;
 using Cthangover.Mods.Rpg;
+using Cthangover.Mods.TileRender;
 using Cthangover.Tools.Common;
 using Cthangover.Tools.Services;
 using Godot;
@@ -19,7 +20,7 @@ namespace Cthangover.Tools.RpgEditor
     /// <summary>
     /// Editor of RPG tile maps (<c>maps/*.json</c>, kind <c>rpg_map</c>).
     /// Layout: toolbar (file, save, layer, brush, grid, zoom, undo/redo, play),
-    /// the tile palette, the game's characters and items as tabs on the left, the
+    /// the tile palette, the game's characters, items and all map appearances as tabs on the left, the
     /// map in the middle, the map's and the selected event's properties on the right.
     /// A character is put on the map as an NPC or an enemy, an item as a pickup:
     /// pick it, press the button, click a cell (<see cref="RpgMapDocument.AddCharacter"/>,
@@ -53,6 +54,7 @@ namespace Cthangover.Tools.RpgEditor
         private ModFileSelector fileSelector;
         private TabContainer sideTabs;
         private RpgTilePalette palette;
+        private OptionButton rendererPicker;
         private SpinBox itemCount;
         private Func<Vector2I, RpgMapEvent> placeAt;
         private string placedKey;
@@ -79,6 +81,14 @@ namespace Cthangover.Tools.RpgEditor
             fileSelector.Refresh();
         }
 
+        /// <summary>Child pickers release their preview regions on exit before the window releases the shared source images.</summary>
+        protected override void Cleanup()
+        {
+            placeAt = null;
+            textures.Dispose();
+            base.Cleanup();
+        }
+
         // ── layout ─────────────────────────────────────────────────
 
         private void BuildUi()
@@ -98,6 +108,7 @@ namespace Cthangover.Tools.RpgEditor
             paletteColumn.AddChild(ToolUi.Section("tools/rpg_editor/section_palette"));
             palette = new RpgTilePalette();
             palette.TileSelected += OnPaletteTile;
+            palette.StampSelected += OnPaletteStamp;
             palette.CollisionSelected += OnPaletteCollision;
             paletteColumn.AddChild(palette);
             sideTabs.AddChild(paletteColumn);
@@ -120,6 +131,12 @@ namespace Cthangover.Tools.RpgEditor
             items.AddAction("tools/rpg_editor/place_item", "tools/rpg_editor/place_item_tip", PlaceItem);
             sideTabs.AddChild(items);
             sideTabs.SetTabTitle(2, ToolUi.Tr("tools/rpg_editor/tab_items"));
+
+            var appearances = new RpgEntityPicker("tools/rpg_editor/appearance_search", "tools/rpg_editor/appearances_hint") { Name = "Appearances" };
+            appearances.Source = LoadAppearances;
+            appearances.AddAction("tools/rpg_editor/place_appearance", "tools/rpg_editor/place_appearance_tip", PlaceAppearance);
+            sideTabs.AddChild(appearances);
+            sideTabs.SetTabTitle(3, ToolUi.Tr("tools/rpg_editor/tab_appearances"));
             sideTabs.TabChanged += OnSideTabChanged;
             main.AddChild(CreateSidebar(leftColumn, 400));
 
@@ -170,6 +187,24 @@ namespace Cthangover.Tools.RpgEditor
             AddToolButton(toolbar, RpgEditTool.Fill, "tools/rpg_editor/tool_fill");
             toolbar.AddChild(ToolUi.Divider());
 
+            rendererPicker = new OptionButton { Name = "RendererPicker" };
+            var wantedRenderer = Cthangover.Core.Games.ActiveGame.GetSetting("tile.renderer") ?? "topdown";
+            foreach (var arg in OS.GetCmdlineUserArgs()) if (arg.StartsWith("--editor-renderer=")) wantedRenderer = arg.Substring(18);
+            foreach (var id in TileRendererRegistry.Instance.Ids)
+            {
+                var index = rendererPicker.ItemCount;
+                var label = id switch
+                {
+                    "topdown" => ToolUi.Tr("tools/rpg_editor/view_topdown"),
+                    "isometric" => ToolUi.Tr("tools/rpg_editor/view_isometric"),
+                    _ => id
+                };
+                rendererPicker.AddItem(label);
+                rendererPicker.SetItemMetadata(index, id);
+                if (id == wantedRenderer) rendererPicker.Select(index);
+            }
+            rendererPicker.ItemSelected += OnRendererSelected;
+            toolbar.AddChild(rendererPicker);
             gridCheck = new CheckBox { Text = ToolUi.Tr("tools/rpg_editor/grid"), ButtonPressed = true };
             gridCheck.Toggled += OnGridToggled;
             toolbar.AddChild(gridCheck);
@@ -432,8 +467,15 @@ namespace Cthangover.Tools.RpgEditor
         private void OnPaletteTile(int index)
         {
             canvas.SelectedTile = index;
+            canvas.SelectedStamp = RpgTileStamp.Single(index);
             if (canvas.ActiveLayer > RpgEditLayer.Front)
                 SelectLayer(RpgEditLayer.Main);
+        }
+
+        private void OnPaletteStamp(RpgTileStamp stamp)
+        {
+            canvas.SelectedStamp = stamp;
+            canvas.QueueRedraw();
         }
 
         private void OnPaletteCollision(char code) => canvas.SelectedCollision = code;
@@ -447,6 +489,14 @@ namespace Cthangover.Tools.RpgEditor
         private List<RpgPickerEntry> LoadCharacters() => RpgCharacterCatalog.Load(textures);
 
         private List<RpgPickerEntry> LoadItems() => RpgItemCatalog.Load(textures);
+
+        private List<RpgPickerEntry> LoadAppearances() => RpgAppearanceCatalog.Load(textures);
+
+        private void PlaceAppearance(RpgPickerEntry entry)
+        {
+            var id = "npc_" + new string(entry.Look.Select(c => char.IsLetterOrDigit(c) || c == '_' ? c : '_').ToArray());
+            BeginPlacing(entry, "tools/rpg_editor/placed_npc", cell => document.AddCharacter(cell.X, cell.Y, id, entry.Look, false));
+        }
 
         private void PlaceNpc(RpgPickerEntry entry)
             => BeginPlacing(entry, "tools/rpg_editor/placed_npc", cell => document.AddCharacter(cell.X, cell.Y, entry.Id, entry.Look, false));
@@ -492,6 +542,7 @@ namespace Cthangover.Tools.RpgEditor
         private void OnTilePicked(int index)
         {
             canvas.SelectedTile = index;
+            canvas.SelectedStamp = RpgTileStamp.Single(index);
             palette.Select(index);
         }
 
@@ -505,7 +556,7 @@ namespace Cthangover.Tools.RpgEditor
             palette.SetCollisionMode(layer == RpgEditLayer.Collision);
             foreach (var button in toolButtons.Values)
                 button.Disabled = layer == RpgEditLayer.Events;
-            canvas.QueueRedraw();
+            canvas.Refresh();
         }
 
         private void SelectTool(RpgEditTool tool)
@@ -513,6 +564,12 @@ namespace Cthangover.Tools.RpgEditor
             canvas.Tool = tool;
             foreach (var pair in toolButtons)
                 pair.Value.SetPressedNoSignal(pair.Key == tool);
+        }
+
+        private void OnRendererSelected(long index)
+        {
+            canvas.SetRenderer(rendererPicker.GetItemMetadata((int)index).AsString());
+            UpdateZoomLabel();
         }
 
         private void OnGridToggled(bool on)

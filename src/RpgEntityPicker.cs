@@ -84,13 +84,14 @@ namespace Cthangover.Tools.RpgEditor
         /// <summary>Reads the entries again and reapplies the search.</summary>
         public void Reload()
         {
+            var selectedId = Selected?.Id;
+            ReleaseEntries();
             all = Source?.Invoke() ?? new List<RpgPickerEntry>();
-            Filter();
+            Filter(selectedId);
         }
 
-        private void Filter()
+        private void Filter(string selectedId)
         {
-            var selectedId = Selected?.Id;
             var query = search.Text.Trim();
             shown.Clear();
             shown.AddRange(all.Where(entry => query.Length == 0
@@ -108,6 +109,23 @@ namespace Cthangover.Tools.RpgEditor
             UpdateButtons();
         }
 
+        /// <summary>Drop the list's native references before disposing entry-owned previews; source images remain cache-owned.</summary>
+        public override void _ExitTree()
+        {
+            ReleaseEntries();
+            Source = null;
+        }
+
+        private void ReleaseEntries()
+        {
+            list.Clear();
+            shown.Clear();
+            var owned = new HashSet<Texture2D>(all.Where(e => e.OwnsIcon && e.Icon != null).Select(e => e.Icon));
+            all.Clear();
+            foreach (var icon in owned)
+                icon.Dispose();
+        }
+
         private void Run(Action<RpgPickerEntry> action)
         {
             if (Selected != null)
@@ -120,7 +138,7 @@ namespace Cthangover.Tools.RpgEditor
                 button.Disabled = Selected == null;
         }
 
-        private void OnSearchChanged(string text) => Filter();
+        private void OnSearchChanged(string text) => Filter(Selected?.Id);
 
         private void OnItemSelected(long index) => UpdateButtons();
     }
