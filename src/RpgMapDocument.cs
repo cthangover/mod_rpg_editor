@@ -42,6 +42,12 @@ namespace Cthangover.Tools.RpgEditor
         /// <summary>Events of the map from other files and mods: shown, not edited (<see cref="SetLockedEvents"/>).</summary>
         public IReadOnlyList<RpgMapEvent> LockedEvents { get; private set; } = new List<RpgMapEvent>();
 
+        /// <summary>Owner of the event file currently being edited; independent of the map's owner.</summary>
+        public string EventsModId { get; set; }
+
+        /// <summary>Selected mod-relative event file. Null keeps the traditional events.json location.</summary>
+        public string EventsFile { get; set; }
+
         /// <summary>The cells.</summary>
         public RpgMapGrid Grid { get; private set; }
 
@@ -147,20 +153,36 @@ namespace Cthangover.Tools.RpgEditor
         }
 
         /// <summary>Places a rectangular selection, skipping padding and clipping at map edges; one history step is recorded by the caller.</summary>
-        public int Stamp(RpgEditLayer layer, int x, int y, RpgTileStamp stamp)
+        public int Stamp(RpgEditLayer layer, int x, int y, RpgTileStamp stamp, RpgTileset tileset = null)
         {
             if (layer > RpgEditLayer.Front || stamp == null)
                 return 0;
             var changed = 0;
+            // Clear overlapped objects before writing any new cells. Doing this during
+            // the write would treat the new object's first cells as another old fragment.
+            if (tileset != null)
+                for (var sy = 0; sy < stamp.Height; sy++)
+                    for (var sx = 0; sx < stamp.Width; sx++)
+                    {
+                        var tile = stamp.TileAt(sx, sy);
+                        var target = stamp.LayerAt(sx, sy, (RpgLayer)layer);
+                        if (tile >= 0 && Grid.InBounds(x + sx, y + sy) && Grid.GetTile(target, x + sx, y + sy) != tile)
+                            changed += RpgObjectEditing.Erase(Grid, tileset, target, x + sx, y + sy);
+                    }
             for (var sy = 0; sy < stamp.Height; sy++)
                 for (var sx = 0; sx < stamp.Width; sx++)
                 {
                     var tile = stamp.TileAt(sx, sy);
-                    if (tile >= 0 && Paint(layer, x + sx, y + sy, tile, RpgCollision.Auto))
+                    if (tile >= 0 && Paint((RpgEditLayer)stamp.LayerAt(sx, sy, (RpgLayer)layer), x + sx, y + sy, tile, RpgCollision.Auto))
                         changed++;
                 }
             return changed;
         }
+
+        /// <summary>Erases a whole object or its surviving fragment; the caller owns the undo step.</summary>
+        public int EraseObject(RpgEditLayer layer, int x, int y, RpgTileset tileset)
+            => layer <= RpgEditLayer.Front && Grid.InBounds(x, y)
+                ? RpgObjectEditing.Erase(Grid, tileset, (RpgLayer)layer, x, y) : 0;
 
         /// <summary>
         /// Flood-fills (4-neighbourhood) the area of cells equal to the start
@@ -195,9 +217,10 @@ namespace Cthangover.Tools.RpgEditor
         }
 
         /// <summary>The events on a cell, top-most (last) first.</summary>
-        public List<RpgMapEvent> EventsAt(int x, int y)
+        public List<RpgMapEvent> EventsAt(int x, int y, bool includeLocked = false)
         {
-            var found = Events.Where(e => e.X == x && e.Y == y).ToList();
+            var source = includeLocked ? LockedEvents.Concat(Events) : Events;
+            var found = source.Where(e => e.X == x && e.Y == y).ToList();
             found.Reverse();
             return found;
         }

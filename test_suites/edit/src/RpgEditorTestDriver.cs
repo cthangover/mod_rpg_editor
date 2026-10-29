@@ -13,6 +13,8 @@ using Godot;
 
 namespace Cthangover.Tools.RpgEditor.Tests
 {
+    using Cthangover.Core.Mods;
+    using Cthangover.Core.Mods.Resolvers;
     /// <summary>
     /// Drives the RPG map editor through its controls like an author: layer
     /// buttons are pressed, the palette and the canvas get mouse events through
@@ -109,8 +111,12 @@ namespace Cthangover.Tools.RpgEditor.Tests
                     if (canvas?.Document == null || canvas.Tileset == null)
                         return;
                     Check(canvas.Document.Map.ID.StartsWith("rpg_"), $"the editor opened a demo map ({canvas.Document.Map.ID})");
-                    Check(canvas.Document.Events.Count > 0 && canvas.Document.LockedEvents.Count == 0,
-                        $"its events come from the mod's map_events file ({canvas.Document.Events.Count} own, {canvas.Document.LockedEvents.Count} locked)");
+                    var allEvents = canvas.Document.Events.Concat(canvas.Document.LockedEvents).ToList();
+                    Check(canvas.Document.Events.Count > 0
+                        && canvas.Document.Events.All(e => e.ModId == canvas.Document.EventsModId && e.File == canvas.Document.EventsFile)
+                        && canvas.Document.LockedEvents.All(e => e.ModId != canvas.Document.EventsModId || e.File != canvas.Document.EventsFile)
+                        && allEvents.Select(e => e.Id).ToHashSet().SetEquals(RpgMapEvents.Of(canvas.Document.Map.ID).Select(e => e.Id)),
+                        $"events retain their source ownership ({canvas.Document.Events.Count} own, {canvas.Document.LockedEvents.Count} locked)");
                     Shot("editor");
                     Press("tools/rpg_editor/layer_main");
                     Check(canvas.ActiveLayer == RpgEditLayer.Main, "the layer button switches the brush to the main layer");
@@ -261,11 +267,15 @@ namespace Cthangover.Tools.RpgEditor.Tests
 
         private void PlaceAppearance()
         {
-            var expected = new[] { "village/hero", "village/slime", "village/wolf", "village/elder", "village/merchant", "village/villager", "rpg_plus/trainer", "rpg_plus/seer" };
+            var required = new[] { "village/hero", "village/slime", "village/wolf", "village/elder", "village/merchant", "village/villager", "rpg_plus/trainer", "rpg_plus/seer" };
+            var expected = Files.Collect(RpgTextures.CharsetGroup).Keys
+                .Where(path => ModConfig.Instance.GetTextureExtensionSet().Contains(Path.GetExtension(path)))
+                .Select(path => Path.ChangeExtension(path, null)).ToHashSet(System.StringComparer.OrdinalIgnoreCase);
             using var appearanceTextures = new RpgTextures();
             var entries = RpgAppearanceCatalog.Load(appearanceTextures);
-            Check(entries.Count == expected.Length && expected.All(path => entries.Any(e => e.Look == path && e.Icon != null)),
-                "all eight appearances have previews, including NPCs without character entities");
+            Check(expected.IsSupersetOf(required) && entries.Count == expected.Count
+                && expected.SetEquals(entries.Select(e => e.Look)) && entries.All(e => e.Icon != null),
+                "all loaded appearances have previews, including the eight required NPC and character looks");
             foreach (var entry in entries.Where(e => e.OwnsIcon))
                 entry.Icon?.Dispose();
             var picker = Pick("Appearances", 3, "elder", "village/elder");
@@ -288,8 +298,10 @@ namespace Cthangover.Tools.RpgEditor.Tests
             picker.Reload();
             Check(previousPreview != null && !GodotObject.IsInstanceValid(previousPreview) && picker.Selected?.Id == "village/elder" && GodotObject.IsInstanceValid(picker.Selected?.Icon),
                 "reloading releases the old preview and preserves a valid selected appearance");
-            Check(picker.FindChildren("*", "", true, false).OfType<ItemList>().First().ItemCount == expected.Length,
-                "reloading the appearance tab keeps all eight rows without duplicates");
+            var rows = picker.FindChildren("*", "", true, false).OfType<ItemList>().First();
+            Check(rows.ItemCount == expected.Count
+                && Enumerable.Range(0, rows.ItemCount).Select(i => rows.GetItemText(i)).Distinct().Count() == expected.Count,
+                "reloading the appearance tab keeps every loaded row without duplicates");
         }
 
         private ModFileSelector Selector() => window.FindChildren("*", "", true, false).OfType<ModFileSelector>().First();
@@ -404,7 +416,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             GameLogger.Log("TEST", $"[TEST_RESULT] name=rpg_editor_edit passed={passed} failed={failures.Count}");
-            GetTree().Quit(failures.Count == 0 ? 0 : 1);
+            Cthangover.Core.Bootstrap.ApplicationExit.Quit(GetTree(), failures.Count == 0 ? 0 : 1);
         }
     }
 }

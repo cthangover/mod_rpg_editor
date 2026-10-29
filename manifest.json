@@ -15,14 +15,21 @@
     "rpg>=1",
     "characters_base>=1",
     "items_base>=1",
-    "editor_tools>=1",
-    "ui_base>=1"
+    "tools_base>=1",
+    "ui_base>=1",
+    "scenario_tools_base>=1"
   ],
   "test_suites": [
     {
       "id": "edit",
       "activate": [
         "--itest=rpg_editor_edit"
+      ]
+    },
+    {
+      "id": "authoring",
+      "activate": [
+        "--itest=rpg_authoring"
       ]
     }
   ]

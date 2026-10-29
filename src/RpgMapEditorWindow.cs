@@ -54,6 +54,9 @@ namespace Cthangover.Tools.RpgEditor
         private ModFileSelector fileSelector;
         private TabContainer sideTabs;
         private RpgTilePalette palette;
+        private OptionButton atlasPicker;
+        private readonly List<string> atlasIds = new();
+        private string paletteSource;
         private OptionButton rendererPicker;
         private SpinBox itemCount;
         private Func<Vector2I, RpgMapEvent> placeAt;
@@ -69,12 +72,15 @@ namespace Cthangover.Tools.RpgEditor
         private string modId;
         private string path;
         private bool isNew;
+        private string mapBaseline;
+        private RpgMapEvent pendingEventSource;
 
         /// <summary>Builds the window and opens the first map found.</summary>
         public RpgMapEditorWindow() : base("tools/rpg_editor/title")
         {
             CthangoverTheme.Apply(this);
             BuildUi();
+            FocusEntered += RefreshTilesetOnFocus;
             SetHint(ToolUi.Tr("tools/rpg_editor/hint"));
             SelectLayer(RpgEditLayer.Back);
             SelectTool(RpgEditTool.Pencil);
@@ -106,6 +112,9 @@ namespace Cthangover.Tools.RpgEditor
 
             var paletteColumn = new VBoxContainer();
             paletteColumn.AddChild(ToolUi.Section("tools/rpg_editor/section_palette"));
+            atlasPicker = new OptionButton { Name = "AtlasPicker", TooltipText = ToolUi.Tr("tools/rpg_editor/atlas_tip") };
+            atlasPicker.ItemSelected += OnAtlasSelected;
+            paletteColumn.AddChild(atlasPicker);
             palette = new RpgTilePalette();
             palette.TileSelected += OnPaletteTile;
             palette.StampSelected += OnPaletteStamp;
@@ -162,6 +171,7 @@ namespace Cthangover.Tools.RpgEditor
             eventPanel.EditStarting += RecordUndo;
             eventPanel.Changed += OnDocumentChanged;
             eventPanel.DeleteRequested += DeleteSelectedEvent;
+            eventPanel.EditSourceRequested += EditEventSource;
             properties.AddChild(eventPanel);
             center.AddChild(CreateSidebar(properties, 340));
         }
@@ -292,6 +302,7 @@ namespace Cthangover.Tools.RpgEditor
             fileSelector.Show(modId, path);
             canvas.SelectedEvent = null;
             BindDocument();
+            mapBaseline = document?.ToJson();
         }
 
         /// <summary>
@@ -299,14 +310,17 @@ namespace Cthangover.Tools.RpgEditor
         /// the game shows on the map is locked. An own event hides a locked one of the
         /// same id (another mod replacing it), so the author sees and edits their own.
         /// </summary>
-        private static RpgMapDocument LoadDocument(string mod, string text)
+        private static RpgMapDocument LoadDocument(string mod, string text, string eventsMod = null, string file = null)
         {
             var id = RpgMapDocument.Load(text).Map.ID;
-            var eventsPath = RpgMapDocument.EventsPath(id);
-            var document = RpgMapDocument.Load(text, ModFileService.ReadText(mod, eventsPath));
+            var eventsPath = file ?? RpgMapDocument.EventsPath(id);
+            eventsMod ??= mod;
+            var document = RpgMapDocument.Load(text, ModFileService.ReadText(eventsMod, eventsPath));
+            document.EventsModId = eventsMod;
+            document.EventsFile = eventsPath;
             var own = new HashSet<string>(document.Events.Select(e => e.Id), StringComparer.OrdinalIgnoreCase);
             document.SetLockedEvents(RpgMapEvents.Of(id)
-                .Where(e => !(e.ModId == mod && e.File == eventsPath) && !own.Contains(e.Id))
+                .Where(e => !(e.ModId == eventsMod && e.File == eventsPath) && !own.Contains(e.Id))
                 .ToList());
             return document;
         }
@@ -338,15 +352,17 @@ namespace Cthangover.Tools.RpgEditor
             }
 
             var json = document.ToJson();
-            var eventsPath = RpgMapDocument.EventsPath(document.Map.ID);
-            var writeEvents = document.Events.Count > 0 || !string.IsNullOrEmpty(ModFileService.ReadText(modId, eventsPath));
-            if (!ModFileService.WriteText(modId, path, json)
-                || (writeEvents && !ModFileService.WriteText(modId, eventsPath, document.EventsToJson())))
+            var eventsPath = document.EventsFile ?? RpgMapDocument.EventsPath(document.Map.ID);
+            var eventsMod = document.EventsModId ?? modId;
+            var writeEvents = document.Events.Count > 0 || !string.IsNullOrEmpty(ModFileService.ReadText(eventsMod, eventsPath));
+            if (((isNew || json != mapBaseline) && !ModFileService.WriteText(modId, path, json))
+                || (writeEvents && !ModFileService.WriteText(eventsMod, eventsPath, document.EventsToJson())))
             {
                 SetStatus(ToolUi.Tr("tools/common/readonly"), ToolStatusKind.Error);
                 return false;
             }
             RpgMapEvents.Invalidate();
+            mapBaseline = json;
 
             var sceneNote = isNew ? EnsureScene() : null;
             if (sceneNote != null)
@@ -396,21 +412,91 @@ namespace Cthangover.Tools.RpgEditor
 
         private void BindDocument()
         {
+            if (document != null)
+                foreach (var mapEvent in document.Events)
+                {
+                    mapEvent.ModId = document.EventsModId ?? modId;
+                    mapEvent.File = document.EventsFile ?? RpgMapDocument.EventsPath(document.Map.ID);
+                }
             canvas.Document = document;
             mapPanel.Bind(document);
-            eventPanel.Bind(canvas.SelectedEvent);
+            OnEventSelected(canvas.SelectedEvent);
+            mapPanel.Visible = canvas.ActiveLayer != RpgEditLayer.Events;
+            eventPanel.Visible = canvas.ActiveLayer == RpgEditLayer.Events;
             LoadTileset();
         }
 
+        /// <summary>
+        /// The canvas paints with the map's composed tileset (its own plus the borrowed ones, <see cref="RpgTilesetComposer"/>);
+        /// the palette shows one source atlas at a time, picked above it. Picking a tileset the map does not use yet
+        /// appends it to <see cref="RpgMap.Tilesets"/>, so its objects can be put on this map.
+        /// </summary>
         private void LoadTileset()
         {
-            var tileset = document == null ? null : RpgTilesetFactory.Instance.Get(document.Map.Tileset);
-            var atlas = tileset == null ? null : textures.Tileset(tileset.Image);
+            var tileset = document == null ? null : RpgTilesetFactory.Instance.ForMap(document.Map);
             canvas.Tileset = tileset;
-            canvas.Atlas = atlas;
-            palette.SetTileset(tileset, atlas);
+            canvas.Atlas = tileset == null ? null : textures.Tileset(tileset.Image);
+            FillAtlasPicker();
+            ShowPaletteSource();
             canvas.Refresh();
             UpdateZoomLabel();
+        }
+
+        private void RefreshTilesetOnFocus()
+        {
+            if (document != null)
+                LoadTileset();
+        }
+
+        private List<string> MapTilesets()
+        {
+            var result = new List<string> { document?.Map.Tileset ?? string.Empty };
+            result.AddRange(document?.Map.Tilesets ?? new List<string>());
+            return result;
+        }
+
+        private void FillAtlasPicker()
+        {
+            atlasPicker.Clear();
+            atlasIds.Clear();
+            if (document == null)
+                return;
+            var used = MapTilesets();
+            if (paletteSource == null || !used.Contains(paletteSource))
+                paletteSource = used[0];
+            foreach (var id in used)
+            {
+                atlasPicker.AddItem(id == used[0] ? id : "+ " + id);
+                atlasIds.Add(id);
+            }
+            foreach (var id in Entities.Collect<RpgTileset>().Keys.OrderBy(k => k).Where(k => !used.Contains(k)))
+            {
+                atlasPicker.AddItem(string.Format(ToolUi.Tr("tools/rpg_editor/atlas_add"), id));
+                atlasIds.Add(id);
+            }
+            atlasPicker.Select(atlasIds.IndexOf(paletteSource));
+        }
+
+        private void ShowPaletteSource()
+        {
+            var slot = MapTilesets().IndexOf(paletteSource);
+            var source = document == null || slot < 0 ? null : RpgTilesetFactory.Instance.Get(paletteSource);
+            palette.SetTileset(source, source == null ? null : textures.Tileset(source.Image), Math.Max(0, slot) * RpgTilesetComposer.SlotSize);
+        }
+
+        private void OnAtlasSelected(long index)
+        {
+            if (document == null || index < 0 || index >= atlasIds.Count)
+                return;
+            paletteSource = atlasIds[(int)index];
+            if (!MapTilesets().Contains(paletteSource))
+            {
+                RecordUndo();
+                document.Map.Tilesets ??= new List<string>();
+                document.Map.Tilesets.Add(paletteSource);
+                SetStatus(string.Format(ToolUi.Tr("tools/rpg_editor/atlas_added"), paletteSource));
+            }
+            LoadTileset();
         }
 
         private void RecordUndo()
@@ -453,7 +539,7 @@ namespace Cthangover.Tools.RpgEditor
 
         private void DeleteSelectedEvent()
         {
-            if (document == null || canvas.SelectedEvent == null)
+            if (document == null || canvas.SelectedEvent == null || !document.Events.Contains(canvas.SelectedEvent))
                 return;
             RecordUndo();
             document.RemoveEvent(canvas.SelectedEvent);
@@ -462,7 +548,38 @@ namespace Cthangover.Tools.RpgEditor
             canvas.Refresh();
         }
 
-        private void OnEventSelected(RpgMapEvent mapEvent) => eventPanel.Bind(mapEvent);
+        private void OnEventSelected(RpgMapEvent mapEvent)
+        {
+            var own = mapEvent != null && document.Events.Contains(mapEvent);
+            if (own)
+            {
+                mapEvent.ModId = document.EventsModId ?? modId;
+                mapEvent.File = document.EventsFile ?? RpgMapDocument.EventsPath(document.Map.ID);
+            }
+            eventPanel.Bind(mapEvent, mapEvent != null && !own);
+        }
+
+        private void EditEventSource(RpgMapEvent mapEvent)
+        {
+            if (!ModFileService.IsWritable(mapEvent?.ModId) || string.IsNullOrEmpty(mapEvent.File))
+                return;
+            pendingEventSource = mapEvent;
+            RunDiscardingChanges(OpenEventSource);
+        }
+
+        private void OpenEventSource()
+        {
+            var source = pendingEventSource;
+            var text = ModFileService.ReadText(modId, path);
+            if (source == null || string.IsNullOrEmpty(text))
+                return;
+            document = LoadDocument(modId, text, source.ModId, source.File);
+            canvas.SelectedEvent = document.Events.FirstOrDefault(e => e.Id == source.Id);
+            MarkClean();
+            BindDocument();
+            mapBaseline = document.ToJson();
+            SetStatus(string.Format(ToolUi.Tr("tools/rpg_editor/editing_event_source"), source.ModId, source.File));
+        }
 
         private void OnPaletteTile(int index)
         {
@@ -543,12 +660,21 @@ namespace Cthangover.Tools.RpgEditor
         {
             canvas.SelectedTile = index;
             canvas.SelectedStamp = RpgTileStamp.Single(index);
+            var source = MapTilesets().ElementAtOrDefault(RpgTilesetComposer.Slot(index));
+            if (source != null && source != paletteSource)
+            {
+                paletteSource = source;
+                atlasPicker.Select(atlasIds.IndexOf(source));
+                ShowPaletteSource();
+            }
             palette.Select(index);
         }
 
         private void SelectLayer(RpgEditLayer layer)
         {
             canvas.ActiveLayer = layer;
+            mapPanel.Visible = layer != RpgEditLayer.Events;
+            eventPanel.Visible = layer == RpgEditLayer.Events;
             if (layer != RpgEditLayer.Events)
                 canvas.Placing = false;
             foreach (var pair in layerButtons)

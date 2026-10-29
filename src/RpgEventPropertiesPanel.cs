@@ -47,9 +47,14 @@ namespace Cthangover.Tools.RpgEditor
         private readonly LineEdit routeSteps;
         private readonly SpinBox routeEvery;
         private readonly CheckBox routeRepeat;
+        private readonly Label sourceLabel;
+        private readonly Button sourceButton;
+        private readonly RpgEventPagesPanel pages;
+        private readonly TabContainer eventTabs;
         private RpgMapEvent mapEvent;
         private bool suppress;
         private bool editing;
+        private bool readOnly;
 
         /// <summary>Raised once before the first change after a bind.</summary>
         public event Action EditStarting;
@@ -60,14 +65,25 @@ namespace Cthangover.Tools.RpgEditor
         /// <summary>The author pressed "delete".</summary>
         public event Action DeleteRequested;
 
+        /// <summary>Asks the window to open the selected event's own file, without copying it into the map mod.</summary>
+        public event Action<RpgMapEvent> EditSourceRequested;
+
         /// <summary>Builds the fields.</summary>
         public RpgEventPropertiesPanel()
         {
             AddChild(ToolUi.Section("tools/rpg_editor/section_event"));
             emptyHint = ToolUi.Hint(ToolUi.Tr("tools/rpg_editor/no_event"));
             AddChild(emptyHint);
+            sourceLabel = ToolUi.Hint("");
+            AddChild(sourceLabel);
+            sourceButton = ToolUi.Button("tools/rpg_editor/edit_event_source", OnEditSource);
+            sourceButton.Name = "EditEventSource";
+            AddChild(sourceButton);
+            eventTabs = new TabContainer();
+            AddChild(eventTabs);
             body = new VBoxContainer();
-            AddChild(body);
+            eventTabs.AddChild(body);
+            body.AddChild(ToolUi.Section("tools/rpg_editor/base_state"));
 
             idEdit = ToolUi.Field(body, "tools/rpg_editor/event_id", ToolUi.Text("", OnTextChanged));
             xSpin = ToolUi.Field(body, "tools/rpg_editor/x", ToolUi.Number(0, 255, 1, OnNumberChanged));
@@ -106,17 +122,26 @@ namespace Cthangover.Tools.RpgEditor
             teleportY = ToolUi.Field(body, "tools/rpg_editor/y", ToolUi.Number(-1, 255, 1, OnNumberChanged));
             teleportDir = ToolUi.Field(body, "tools/rpg_editor/dir", RpgEditorFields.Direction(OnDirectionPicked));
 
+            pages = new RpgEventPagesPanel();
+            pages.EditStarting += BeginPageChange;
+            pages.Changed += OnPageChanged;
+            eventTabs.AddChild(pages);
+            eventTabs.SetTabTitle(0, ToolUi.Tr("tools/rpg_editor/section_event"));
+            eventTabs.SetTabTitle(1, ToolUi.Tr("tools/rpg_editor/section_pages"));
             body.AddChild(ToolUi.Button("tools/rpg_editor/delete_event", OnDeletePressed));
             Bind(null);
         }
 
         /// <summary>Shows an event (null: the hint instead of the fields).</summary>
-        public void Bind(RpgMapEvent value)
+        public void Bind(RpgMapEvent value, bool locked = false)
         {
             mapEvent = value;
             editing = false;
             emptyHint.Visible = value == null;
-            body.Visible = value != null;
+            eventTabs.Visible = value != null;
+            readOnly = locked;
+            sourceLabel.Visible = value != null;
+            sourceButton.Visible = value != null && locked && ModFileService.IsWritable(value.ModId);
             if (value == null)
                 return;
 
@@ -142,8 +167,31 @@ namespace Cthangover.Tools.RpgEditor
             routeRepeat.ButtonPressed = value.Route?.Repeat ?? true;
             lightRadius.Value = value.Light?.Radius ?? 0;
             lightColor.Text = value.Light?.Color ?? string.Empty;
+            sourceLabel.Text = string.Format(ToolUi.Tr("tools/rpg_editor/event_source"), value.ModId, value.File);
+            foreach (var child in body.FindChildren("*", "", true, false))
+            {
+                if (pages.IsAncestorOf(child)) continue;
+                if (child is BaseButton button) button.Disabled = locked;
+                if (child is LineEdit line) line.Editable = !locked;
+                if (child is TextEdit text) text.Editable = !locked;
+                if (child is SpinBox number) number.Editable = !locked;
+            }
+            pages.Bind(value, locked);
             suppress = false;
         }
+
+        private void OnEditSource() => EditSourceRequested?.Invoke(mapEvent);
+
+        private void BeginPageChange()
+        {
+            if (!editing)
+            {
+                EditStarting?.Invoke();
+                editing = true;
+            }
+        }
+
+        private void OnPageChanged() => Changed?.Invoke();
 
         /// <summary>Re-reads the cell after the event was dragged on the canvas.</summary>
         public void RefreshCell()
@@ -170,13 +218,13 @@ namespace Cthangover.Tools.RpgEditor
 
         private void OnDeletePressed()
         {
-            if (mapEvent != null)
+            if (mapEvent != null && !readOnly)
                 DeleteRequested?.Invoke();
         }
 
         private void Write()
         {
-            if (suppress || mapEvent == null)
+            if (suppress || mapEvent == null || readOnly)
                 return;
             if (!editing)
             {

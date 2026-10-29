@@ -8,6 +8,7 @@ namespace Cthangover.Tools.RpgEditor
     public class RpgTileStamp
     {
         private readonly int[] tiles;
+        private readonly RpgLayer?[] layers;
 
         /// <summary>Selection width in cells.</summary>
         public int Width { get; }
@@ -16,17 +17,24 @@ namespace Cthangover.Tools.RpgEditor
         public int Height { get; }
 
         /// <summary>Copies a rectangular set of logical tile ids; negative ids denote gaps.</summary>
-        public RpgTileStamp(int width, int height, int[] values)
+        public RpgTileStamp(int width, int height, int[] values, RpgLayer?[] targetLayers = null)
         {
             if (width < 1 || height < 1 || values == null || values.Length != width * height)
                 throw new ArgumentException("A stamp must contain exactly width times height cells.");
             Width = width;
             Height = height;
             tiles = (int[])values.Clone();
+            if (targetLayers != null && targetLayers.Length != values.Length)
+                throw new ArgumentException("Stamp layers must match its cells.");
+            layers = targetLayers == null ? null : (RpgLayer?[])targetLayers.Clone();
         }
 
         /// <summary>Logical id at the given offset, or -1 outside the selection.</summary>
         public int TileAt(int x, int y) => x >= 0 && y >= 0 && x < Width && y < Height ? tiles[y * Width + x] : -1;
+
+        /// <summary>Preferred tileset layer, or the author's active layer when none was assigned.</summary>
+        public RpgLayer LayerAt(int x, int y, RpgLayer fallback)
+            => layers != null && x >= 0 && y >= 0 && x < Width && y < Height ? layers[y * Width + x] ?? fallback : fallback;
 
         /// <summary>Single-tile brush, also used for surface materials and the pipette.</summary>
         public static RpgTileStamp Single(int index) => new(1, 1, new[] { index });
@@ -35,6 +43,7 @@ namespace Cthangover.Tools.RpgEditor
         public static RpgTileStamp FromAtlas(RpgTileset tileset, Rect2I rectangle)
         {
             var values = new int[rectangle.Size.X * rectangle.Size.Y];
+            var layers = new RpgLayer?[values.Length];
             var packed = tileset.Tiles.Exists(t => t.AtlasIndex != null);
             for (var y = 0; y < rectangle.Size.Y; y++)
                 for (var x = 0; x < rectangle.Size.X; x++)
@@ -42,8 +51,9 @@ namespace Cthangover.Tools.RpgEditor
                     var physical = (rectangle.Position.Y + y) * tileset.Columns + rectangle.Position.X + x;
                     values[y * rectangle.Size.X + x] = packed
                         ? tileset.Tiles.Find(t => t.AtlasIndex == physical)?.Index ?? -1 : physical;
+                    layers[y * rectangle.Size.X + x] = tileset.TileOf(values[y * rectangle.Size.X + x])?.Layer;
                 }
-            return new RpgTileStamp(rectangle.Size.X, rectangle.Size.Y, values);
+            return new RpgTileStamp(rectangle.Size.X, rectangle.Size.Y, values, layers);
         }
     }
 }

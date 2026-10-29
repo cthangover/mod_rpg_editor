@@ -1,0 +1,6 @@
+{
+  "name": "RPG authoring regression checks",
+  "description": "Edits a barrel's source file and states, splits an object's cells across map layers, replaces a house and erases an isometric fragment through the real editor windows. Test files are restored.",
+  "sources": ["src/*.cs"],
+  "depends": ["rpg_tileset_editor>=1", "village_pack>=1", "rpg_demo_game>=1", "rpg_plus_game>=1"]
+}
