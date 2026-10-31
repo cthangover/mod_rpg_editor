@@ -1,57 +1,74 @@
-# RPG Map Editor — pinta mapas de tiles y coloca eventos
+# Editor de mapas RPG — pintar mapas y colocar objetos
 
-El RPG Map Editor edita los mapas de tiles del motor RPG con el juego en marcha: las tres capas de tiles, muros y pasos, el punto de inicio del jugador, los combates aleatorios y los eventos — personajes, carteles, puertas, objetos que recoger. Al guardar, el mapa se actualiza en el juego al instante, y **Jugar** te deja recorrerlo a pie.
+El Editor de mapas RPG cambia los mapas de losetas del mundo RPG mientras el juego está en marcha. Se pintan el suelo y los muros, se colocan sprites y personajes en casillas, se pinta la colisión, se mueve el punto de aparición y se configuran los encuentros aleatorios. **Guardar** escribe los archivos del mapa, y el juego recorre el mapa nuevo al momento, sin reiniciar.
 
-Se abre desde la caja de herramientas (el martillo de la barra) como **Editor de mapas RPG**, sobre el mapa en el que esté el jugador.
+Se abre desde la caja de herramientas (el martillo de la barra) como **RPG Map Editor**. Se abre en el mapa que muestra el juego; para abrir otro, use el selector de mapas.
 
-## Una edición y su resultado en el juego
+## Qué se ve en la ventana
 
-La casa del anciano de RPG Plus antes de editar:
+![El Editor de mapas RPG sobre la casa del anciano de RPG Plus: la barra con el selector de mapa, Save, Undo, Redo y las herramientas; la paleta de objetos a la izquierda con la pestaña Surfaces; el mapa en el centro; el inspector a la derecha con el tamaño, el punto de aparición, los enlaces de teletransporte y los encuentros.](assets/rpg-editor-open.jpg)
 
-![La casa del anciano en el juego: una habitación de madera con el anciano al fondo y un cofre a la derecha.](assets/house-before.jpg)
+- **Barra de herramientas** — el mod y el archivo del mapa (**+** crea un mapa nuevo), **Save**, **Undo**, **Redo**, las cinco herramientas, el selector de código de colisión, el selector de proyección (**Top-down** o **Isometric**) y **Fit**, que muestra el mapa entero.
+- **Paleta** (izquierda) — los objetos RPG del mod, en cuatro pestañas según su forma: **Surfaces** (suelo), **Segments** (una casilla de muro o de valla), **Sprites** (objetos en la cuadrícula) y **Actors** (personajes en una casilla). Cada pestaña tiene búsqueda por nombre o id y una miniatura por fila.
+- **Mapa** (centro) — el mapa dibujado por el propio renderizador del juego. Los marcos finos muestran las casillas que ocupa cada colocación; la colocación seleccionada aparece rellena.
+- **Inspector** (derecha) — la colocación seleccionada, las propiedades del mapa, sus enlaces de teletransporte y los encuentros.
 
-En el editor: la pestaña **Appearance** (Apariencias), el sprite del mercader, **Place NPC** (Colocar PNJ), un clic en una casilla libre. El evento nuevo queda seleccionado en la capa **Eventos**, con sus propiedades a la derecha:
+El selector de proyección solo cambia el dibujo. El mapa es el mismo en ambas proyecciones, y se puede cambiar mientras se edita:
 
-![El Editor de mapas RPG sobre rpg_demo_game / rpg_elder_house.json: la lista Appearance con merchant · village/merchant seleccionado, el mapa con el anciano y el nuevo mercader enmarcados como eventos y marcos discontinuos alrededor de los eventos de otros archivos, y a la derecha las propiedades del mapa (tileset village, 12 × 10, punto de inicio 6, 8 mirando arriba) y el nuevo evento npc_village_merchant en 9, 3 con charset village/merchant, orientación abajo y activación por tecla de acción (E/F). La línea de estado dice que «merchant» se colocó como PNJ.](assets/editor-npc.jpg)
+![La misma casa del anciano en la proyección isométrica.](assets/rpg-editor-isometric.jpg)
 
-Tras **guardar** (Ctrl+S), el mercader está en la casa:
+## Las herramientas
 
-![La misma sala en el juego, ahora con el mercader a la derecha de la pared del fondo.](assets/house-after.jpg)
+- **Select** — un clic sobre una colocación la selecciona; arrastrar la mueve a otra casilla; **Delete** la quita; **Esc** quita la selección.
+- **Paint** — elija una superficie o un segmento en la paleta y haga clic o arrastre sobre las casillas. Las superficies pintan el suelo y los segmentos la capa de estructura. El botón derecho borra.
+- **Place** — elija un sprite o un actor y haga clic en una casilla. Un fantasma del objeto sigue al puntero; se vuelve rojo donde el objeto bloquearía casillas. La pestaña **Personajes** (la última) coloca un personaje como objeto actor: el objeto se escribe en el mod del mapa (`objects/characters.json`) al elegirlo, y un personaje con escenario de unión (véase el editor de personajes) se une al grupo al hablar con él.
+- **Collision** — pinta la transitabilidad de las casillas: **As objects (.)** lo deciden los objetos, **Blocked (#)** bloquea la casilla, **Forced open (o)** la deja libre a la fuerza.
+- **Spawn** — un clic en una casilla pone allí el punto de aparición del jugador. El botón **Pick a cell** del inspector cambia a esta herramienta.
 
-Su diálogo y comportamiento se ajustan en las propiedades del evento: un escenario, una condición, un disparador.
+Un trazo de superficie muestra sus casillas mientras arrastra. Cada trazo, colocación, movimiento, cambio de colisión y cambio del punto de aparición es un paso de deshacer.
 
-## Las capas y las herramientas
+![Pintando una superficie: en la pestaña Surfaces está elegida la tierra, la herramienta Paint está activa y la casilla bajo el puntero aparece marcada.](assets/rpg-editor-paint.jpg)
 
-- **Fondo**, **Principal**, **Frente** — las capas de tiles. Fondo y Principal pueden bloquear el paso con tiles sólidos; Frente se dibuja sobre los personajes y nunca bloquea.
-- **Colisiones** — se pinta sobre los tiles: *Muro* (siempre bloqueado), *Paso* (siempre transitable) o *Auto* (según los tiles).
-- **Eventos** — clic para seleccionar o arrastrar, doble clic en una casilla vacía para añadir, Supr para borrar.
-- **Lápiz**, **Goma**, **Relleno**; el botón derecho borra, Alt+clic toma un tile, las teclas 1–5 cambian de capa y B/E/G los pinceles.
-- **Deshacer**/**Rehacer** (Ctrl+Z / Ctrl+Y), la cuadrícula, el zoom (Ctrl+rueda).
+Para colocar un sprite, elíjalo en la pestaña **Sprites**, active **Place** y haga clic en la casilla. La colocación nueva queda seleccionada y el inspector la muestra al momento. Un clic sobre una colocación existente con **Select** muestra sus propiedades en el inspector:
 
-![La capa Colisiones de la casa del anciano: los muros pintados en rojo como Muro, el suelo abierto.](assets/collision.jpg)
+![Colocación en la casa del anciano seleccionada con Select: el barril aparece relleno de amarillo y el inspector muestra el objeto, el id, que es colocación propia del mapa, la casilla y el botón Remove.](assets/rpg-editor-placement.jpg)
 
-Las pestañas de la izquierda: **Casillas** (la paleta del tileset del mapa; los objetos enteros, como una casa o un árbol, se estampan de una vez), **Personajes** (personajes con atributos de combate, colocados como enemigos), **Objetos** (colocados como objetos que recoger, con cantidad) y **Appearance** (todos los sprites de los mods cargados, colocados como PNJ).
+![Colocando un sprite: en la pestaña Sprites está elegido un barril y la herramienta Place activa; el fantasma del barril está sobre la casilla bajo el puntero.](assets/rpg-editor-place.jpg)
 
-La columna derecha reúne las propiedades del mapa: su clave de nombre, tileset, tamaño, zoom, luz fija y atmósfera, el punto de inicio con su orientación, y los combates aleatorios (cada ~N pasos, los grupos de enemigos tipo `slime; wolf,slime`).
+## El inspector
 
-## Vista superior e isométrica
+- **Colocación** — el nombre y el id del objeto, y de dónde viene la colocación. Las colocaciones propias del mapa dicen *This map's own placement*. Una colocación de otro mod muestra el nombre de ese mod: sus cambios se escriben como parche en su mod, y el archivo del otro mod no cambia. Puede cambiar **Cell X** y **Cell Y**, **Remove** la quita, o **Reset** quita el parche de su mod para que el juego vuelva a ver la colocación del dueño.
+- **Interacción** — qué ocurre cuando el jugador la usa o la pisa. **Hace** elige **Entrega un objeto** (el selector de objeto y **Cantidad**), **Lleva a otra casilla o mapa** (el selector de mapa, el destino X e Y, la mirada y **Elegir la casilla en el mapa**), **Abre un diálogo** (el selector de escena), **Abre una tienda** (el selector de tienda) o **Nada**. **Cuándo** elige usarla (E o F mirando al objeto) o pisarla. La elección sustituye la interacción propia del objeto solo en esta colocación, así que también se sustituyen los comandos propios del cofre. Para elegir la casilla de otro mapa, guarde antes: el editor abre ese mapa, usted hace clic en la casilla de llegada y vuelve a abrirse el mapa de origen con el destino escrito (Ctrl+S guarda; Esc cancela). En una colocación de otro mod que ya tiene su propia interacción, una elección que descarta alguno de sus campos se rechaza, porque un parche no puede descartarlo: cambie el archivo del propietario.
+- **Mapa** — el tamaño en casillas, el punto de aparición (**Elegir casilla**), la **Variante** (el aspecto de los objetos en esta variante del mapa) y la **Atmósfera** (por ejemplo `woodland`; ninguna para ninguna). Ambas se eligen de listas.
+- **Enlaces de teletransporte** — adónde llevan los teletransportes de este mapa y cuáles llevan aquí. En el mapa, una flecha azul va de una puerta a su casilla de destino en este mapa, o sale hacia el nombre del otro mapa; una verde llega desde otro mapa; una roja indica un destino roto. La lista muestra los mismos enlaces (→ sale, ← llega). Haga clic en un enlace para abrir el mapa de destino. Una marca roja significa destino roto: no existe el mapa, la casilla está fuera del mapa o está bloqueada.
+- **Encuentros** — solo aparecen si el juego tiene la integración de combates aleatorios (`rpg__battles`). **Steps per battle** es la media de pasos entre combates (0 los desactiva). **Enemy groups** admite un grupo por línea, con los enemigos separados por comas; **Apply encounters** los escribe.
+- **Añadir grupo de enemigos...** (en la misma sección) añade una línea con ese enemigo como grupo propio; edite la línea para poner varios enemigos en un grupo.
+- **Vista previa del estado** — para una colocación cuyo objeto tiene estados o una interacción con flags `self.`, el inspector muestra esos flags como casillas. Marcar un flag muestra el estado que se le aplica, según la regla del propio juego. Es solo una vista previa: los valores se guardan mientras la ventana está abierta, no se guarda nada y los flags del juego no cambian. El lienzo sigue dibujando el aspecto propio del objeto: el sprite no cambia con el estado.
 
-El editor dibuja el mapa igual que lo dibuja el juego. El selector de vista de la barra cambia solo la vista previa; los datos del mapa quedan igual. La casa en la vista previa isométrica:
+![El mapa de la aldea de rpg_plus_game: el inspector enumera sus enlaces de teletransporte, salientes (→, con el mapa y la casilla de destino) y entrantes (←).](assets/rpg-editor-village.jpg)
 
-![La casa del anciano en la vista previa isométrica del editor: la misma sala dibujada en isométrico, la paleta del tileset a la izquierda.](assets/editor-isometric.jpg)
+## Guardar y qué archivos cambian
 
-La vista del juego la fija el ajuste de la colección `tile.renderer` (`topdown` o `isometric`); `--editor-renderer=isometric` abre el editor directamente con la vista previa isométrica.
+- **Save** (Ctrl+S) valida primero el mapa y sus colocaciones. Un problema detiene el guardado, y la línea de estado indica cuál es. Si no, el editor escribe solo los archivos que han cambiado, en el mod elegido.
+- Un mapa nuevo, creado con **+** (16 × 12 casillas, punto de aparición en 1,1), se escribe al primer guardado junto con su escena. Desde entonces el juego conoce el mapa al momento.
+- Puede abrir el mapa de un mod del que depende. Pintar ese mapa se escribe como trazos en un parche de su mod; el archivo del mapa del dueño queda idéntico byte a byte.
+- No se añaden colocaciones a un mapa de otro mod. Solo se puede guardar en mods instalados como carpeta.
 
-## Qué archivos se escriben
+## Pendiente
 
-- El mapa en sí se guarda en su `maps/<id>.json`.
-- Los eventos van al archivo de eventos del propio mapa, en el mismo mod (`map_events/<mapa>/…`). Los eventos que otros archivos u otros mods añaden al mapa se muestran atenuados con marcos discontinuos y nunca se reescriben; sus ids no se pueden reutilizar.
-- **+** junto a la lista de archivos crea un mapa nuevo en el mod elegido; tras guardar, el juego lo conoce como escena.
-- Solo se pueden escribir los mods instalados como carpetas.
+Esto no está en la versión actual; no lo busque:
 
-## Si algo falla
+- renombrar el id de una colocación o de un mapa actualizando las referencias;
+- selección por rectángulo, copiar y pegar colocaciones;
+- abrir un objeto colocado en el Editor de objetos RPG desde el mapa;
+- estados y variantes de la colocación: la vista previa lee los estados propios del objeto; los cambios de estado por colocación y las variantes no se editan aquí;
+- pintar las máscaras de efectos de la atmósfera sobre el mapa — aquí no se editan; para el aspecto use el Effects Editor;
+- **Interacción**, objeto recogible: **Colocar en el mapa** del editor de objetos pone el objeto recogible en el mapa; el objeto entrega su ítem cuando la colocación tiene la interacción **Entrega un objeto** (se elige en el inspector).
 
-1. **Jugar dice que el juego no conoce la escena.** El mapa necesita un `scenes/<id>.json` en su mod.
-2. **Un evento no se deja seleccionar.** Pertenece a otro archivo o mod (marco discontinuo).
-3. **Un PNJ no habla.** Su evento no tiene escenario, o su activación no es la tecla de acción.
-4. **Al guardar cambian líneas que no tocaste.** El editor escribe los archivos en su propio orden y añade valores por defecto de los eventos, así que un diff puede mostrar más que la edición.
+## Si algo sale mal
+
+1. **El mapa no está en la lista de archivos.** No está en el mod elegido ni en sus dependencias.
+2. **Save no hace nada y la línea de estado muestra un problema.** Un mapa o una colocación no son válidos; corrija la casilla o el valor que indica la línea.
+3. **El juego no conoce un mapa nuevo.** Guarde primero: el mapa y su escena se escriben solo en el primer guardado.
+4. **Una colocación se rechaza.** El objeto no es un sprite ni un actor, la casilla está fuera del mapa o el mapa pertenece a otro mod.
+5. **No hay panel de encuentros.** El juego no tiene combates aleatorios (`rpg__battles`).

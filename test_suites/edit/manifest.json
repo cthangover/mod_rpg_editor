@@ -1,10 +1,10 @@
 {
   "name": "RPG Map Editor Test",
-  "description": "GUI test of the RPG map editor on the rpg_demo_game maps of rpg_plus: opens the window, picks a tile in the palette, paints it on the main layer with the mouse, undoes with Ctrl+Z, adds an event by double-clicking on the events layer, and closes without saving (the mod's files stay untouched). Activated by --itest=rpg_editor_edit with --game=rpg_plus --new (the prologue is clicked through first); --shots=<dir> saves screenshots (windowed runs only).",
+  "description": "GUI test of the RPG map editor (model v2) on rpg_plus_game: the palette lists the four shapes, the projection toggles during editing, a surface and a segment are painted, a sprite is placed, dragged to another cell and deleted, Ctrl+Z and Ctrl+Y work, a collision cell and the spawn point are set; a new map is made with + and saved, and the game knows its map and scene at once. The demo map is never saved; every file of the mod is compared with its text afterwards and the new map's files are deleted. Activated by --itest=rpg_editor_edit with --game=rpg_plus --new (--editor-renderer=isometric starts in the isometric projection).",
   "sources": [
     "src/*.cs"
   ],
   "depends": [
-    "rpg_demo_game>=1"
+    "rpg_plus_game>=1"
   ]
 }

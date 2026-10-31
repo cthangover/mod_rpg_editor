@@ -1,0 +1,10 @@
+{
+  "name": "RPG Companion Test",
+  "description": "GUI test of the characters on the RPG map (plan 14.G7, 14.G11) on rpg_plus_game: the Characters tab of the map editor places a character as an actor on a new map (its join scenario is written first, as characters_editor does), the actor is saved and the game plays it: talking to it joins the party, the actor leaves its cell and the companion walks behind the hero. In the same window the state preview of a barrel ticks its self.open flag and shows the state that applies (preview only: nothing is written). Every file of the mod is compared with its text from the start afterwards; the new map, the actor entry and the join scenario are removed. Activated by --itest=rpg_companion_edit with --game=rpg_plus --new.",
+  "sources": [
+    "src/*.cs"
+  ],
+  "depends": [
+    "rpg_plus_game>=1"
+  ]
+}

@@ -3,7 +3,7 @@
   "name": "RPG Map Editor",
   "version": "1.0.0",
   "author": "ct",
-  "description": "Paints the RPG engine's tile maps while the game runs: three tile layers, collision, events, spawn and random encounters. A save updates the world at once.",
+  "description": "RPG map editor for model v2 (plan 12.4): a palette by shape, the map in the game's own top-down and isometric projections, placements (own and foreign, as patches), strokes, collision, spawn, teleport links, undo and a byte-stable save; encounters when rpg__battles is mounted.",
   "category": "tools, editor",
   "sources": [
     "src/**/*.cs"
@@ -13,6 +13,7 @@
   ],
   "depends": [
     "rpg>=1",
+    "effects_base>=1",
     "characters_base>=1",
     "items_base>=1",
     "tools_base>=1",
@@ -27,9 +28,9 @@
       ]
     },
     {
-      "id": "authoring",
+      "id": "companion",
       "activate": [
-        "--itest=rpg_authoring"
+        "--itest=rpg_companion_edit"
       ]
     }
   ]
