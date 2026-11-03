@@ -4,6 +4,16 @@ El Editor de mapas RPG cambia los mapas de losetas del mundo RPG mientras el jue
 
 Se abre desde la caja de herramientas (el martillo de la barra) como **RPG Map Editor**. Se abre en el mapa que muestra el juego; para abrir otro, use el selector de mapas.
 
+## Crear eventos y objetos desde el mapa
+
+Pulsa **Evento** y arrastra un rectángulo sobre las casillas. Elige **Al pisar** o **Al usar (E / F)**, escribe comandos, pulsa **Aplicar evento** y **Guardar**. No necesitas crear un objeto ni un archivo de guion aparte.
+
+Mueve o redimensiona la región con Seleccionar, en ambas proyecciones. Las opciones permiten una condición, un guion compartido o un teletransporte. Para usarlo una vez, escribe `self.done != 1` como condición y termina el guion con `flag self.done 1`. Los eventos no tienen imagen y no bloquean el paso por defecto.
+
+Pulsa **Nuevo objeto…** bajo la paleta para abrir su formulario en el mod del mapa. Configura la imagen y la interacción, guarda y elige el objeto en la paleta actualizada para colocarlo.
+
+![Evento del mapa: región, activador y guion en un editor.](assets/map-event.png)
+
 ## Qué se ve en la ventana
 
 ![El Editor de mapas RPG sobre la casa del anciano de RPG Plus: la barra con el selector de mapa, Save, Undo, Redo y las herramientas; la paleta de objetos a la izquierda con la pestaña Surfaces; el mapa en el centro; el inspector a la derecha con el tamaño, el punto de aparición, los enlaces de teletransporte y los encuentros.](assets/rpg-editor-open.jpg)

@@ -29,13 +29,16 @@ namespace Cthangover.Tools.RpgEditor
         private const float LineWidth = 2f;
         private const float LabelSize = 12f;
 
-        private RpgTeleportArrow(Vector2 from, Vector2 to, Color color, bool broken, string label)
+        private RpgTeleportArrow(Vector2 from, Vector2 to, Color color, bool broken, string label, string placement, bool incoming, bool local)
         {
             From = from;
             To = to;
             Color = color;
             Broken = broken;
             Label = label;
+            Placement = placement;
+            Incoming = incoming;
+            Local = local;
         }
 
         /// <summary>Where the arrow starts, in cell space.</summary>
@@ -53,6 +56,15 @@ namespace Cthangover.Tools.RpgEditor
         /// <summary>The other map's id for an arrow that leaves or enters the map; null for an arrow between two cells here.</summary>
         public string Label { get; }
 
+        /// <summary>Id of the placement that carries the teleport: the door of an outgoing arrow, the source of an incoming one.</summary>
+        public string Placement { get; }
+
+        /// <summary>True for an arrow that comes in from another map (its head is the arrival cell here).</summary>
+        public bool Incoming { get; }
+
+        /// <summary>True for an outgoing arrow whose target is a cell of this map (its head is the target, which can be dragged).</summary>
+        public bool Local { get; }
+
         /// <summary>
         /// The arrows of a map: the outgoing teleports of its placements (<paramref name="outgoing"/>, with their source cells) and
         /// the incoming ones from other maps (<paramref name="incoming"/>, with their arrival cells on this map).
@@ -68,17 +80,17 @@ namespace Cthangover.Tools.RpgEditor
                 var broken = link.Broken != null;
                 if (string.Equals(link.Map, mapId, StringComparison.OrdinalIgnoreCase))
                 {
-                    result.Add(new RpgTeleportArrow(from, new Vector2(link.X + 0.5f, link.Y + 0.5f), broken ? BrokenColor : OutgoingColor, broken, null));
+                    result.Add(new RpgTeleportArrow(from, new Vector2(link.X + 0.5f, link.Y + 0.5f), broken ? BrokenColor : OutgoingColor, broken, null, link.Placement, false, true));
                     continue;
                 }
                 var outward = Outward(from, centre);
-                result.Add(new RpgTeleportArrow(from, from + outward * EdgeLength, broken ? BrokenColor : OutgoingColor, broken, link.Map));
+                result.Add(new RpgTeleportArrow(from, from + outward * EdgeLength, broken ? BrokenColor : OutgoingColor, broken, link.Map, link.Placement, false, false));
             }
             foreach (var link in incoming ?? Array.Empty<RpgTeleportLink>())
             {
                 var arrival = new Vector2(link.X + 0.5f, link.Y + 0.5f);
                 var outward = Outward(arrival, centre);
-                result.Add(new RpgTeleportArrow(arrival + outward * EdgeLength, arrival, IncomingColor, false, link.Map));
+                result.Add(new RpgTeleportArrow(arrival + outward * EdgeLength, arrival, IncomingColor, false, link.Map, link.Placement, true, false));
             }
             return result;
         }

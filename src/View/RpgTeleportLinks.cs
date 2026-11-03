@@ -59,7 +59,7 @@ namespace Cthangover.Tools.RpgEditor
             Func<string, RpgObject> objects, IReadOnlyDictionary<string, RpgMap> maps)
         {
             var result = new List<RpgTeleportLink>();
-            foreach (var placement in placements)
+            foreach (var placement in placements.Concat((map.Events ?? new List<RpgMapEvent>()).Select(e => e.AsPlacement(mapId))))
             {
                 var teleport = TeleportOf(placement, map, objects);
                 if (teleport == null)
@@ -112,6 +112,8 @@ namespace Cthangover.Tools.RpgEditor
 
         private static RpgTeleport TeleportOf(RpgPlacement placement, RpgMap map, Func<string, RpgObject> objects)
         {
+            var mapEvent = map?.Events?.FirstOrDefault(e => e.Scope(map.ID) == placement?.ID);
+            if (mapEvent != null) return mapEvent.Teleport;
             if (placement == null || string.IsNullOrEmpty(placement.Object))
                 return null;
             var resolved = objects?.Invoke(placement.Object);

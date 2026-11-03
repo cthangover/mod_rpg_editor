@@ -156,6 +156,29 @@ namespace Cthangover.Tools.RpgEditor.Tests
         public static (List<(string Id, string OwnerMod, string File, JsonObject Written)> Maps, List<(string Id, string OwnerMod, string File, JsonObject Written)> Placements) GameEntities(IEnumerable<(string Path, string Text)> gameFiles)
             => (EntitiesOf(gameFiles, "rpg_map", GameMod), EntitiesOf(gameFiles, "rpg_placement", GameMod));
 
+        /// <summary>
+        /// Frozen legacy doors for placement-patch compatibility tests. Production maps now store these doors as Events;
+        /// those tests must exercise real old-format data rather than depend on the sample game's current authoring format.
+        /// </summary>
+        public static (List<(string Id, string OwnerMod, string File, JsonObject Written)> Maps, List<(string Id, string OwnerMod, string File, JsonObject Written)> Placements) LegacyGameEntities(IEnumerable<(string Path, string Text)> gameFiles)
+        {
+            var (maps, placements) = GameEntities(gameFiles);
+            foreach (var map in maps) map.Written.Remove("Events");
+            var doors = new[]
+            {
+                ("legacy/doors.json", @"
+                {""Kind"":""rpg_placement"",""Items"":[
+                  {""Id"":""rpg_village/door_merchant"",""Object"":""village_pack/marker/trigger"",""X"":21,""Y"":6,""Solid"":true,
+                   ""Interact"":{""Trigger"":""Use"",""Scenario"":""rpg_plus/events/locked_door""}},
+                  {""Id"":""rpg_desert/rpg_plus_enter_desert_house"",""Object"":""village_pack/marker/trigger"",""X"":4,""Y"":4,
+                   ""Interact"":{""Trigger"":""Step"",""Teleport"":{""Map"":""rpg_plus_desert_desert_house"",""X"":2,""Y"":3,""Dir"":""Up""}}}
+                ]}
+                ")
+            };
+            placements.AddRange(EntitiesOf(doors, "rpg_placement", GameMod));
+            return (maps, placements);
+        }
+
         /// <summary>The text of one file of the given list, or null.</summary>
         public static string TextOf(IEnumerable<(string Path, string Text)> files, string path)
             => files.FirstOrDefault(f => f.Path == path).Text;

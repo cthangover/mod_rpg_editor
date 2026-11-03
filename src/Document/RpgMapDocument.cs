@@ -30,7 +30,7 @@ namespace Cthangover.Tools.RpgEditor
     /// Placement ids are global (<c>&lt;map&gt;/&lt;local id&gt;</c>); a placement belongs to the map named before the
     /// first <c>/</c> (<see cref="MapOfPlacement"/>), as in the runtime.
     /// </summary>
-    public sealed class RpgMapDocument
+    public sealed partial class RpgMapDocument
     {
         private const string Category = "RPG_EDITOR";
         private const string MapKind = "rpg_map";
@@ -94,6 +94,35 @@ namespace Cthangover.Tools.RpgEditor
             => placements.Records.Where(r => MapOfPlacement(r.Id) == MapId)
                 .Concat(placements.Foreign.Where(r => MapOfPlacement(r.Id) == MapId))
                 .ToList();
+
+        /// <summary>
+        /// Every placement of the mod's maps that the document can change, of every map (plan 14.G18): the own ones and the
+        /// dependencies' ones (as their data stands now, an unsaved change included); a deleted foreign placement is left out.
+        /// </summary>
+        public IEnumerable<EntityRecord> PlacementRecords
+            => placements.Records.Concat(placements.Foreign.Where(r => !placements.IsDeleted(r)));
+
+        /// <summary>The placement with this id on any map of the mod (own or a dependency's), or null when there is none or it is deleted.</summary>
+        public EntityRecord AnyPlacement(string id)
+        {
+            var record = placements.Find(id) ?? placements.FindForeign(id);
+            return record != null && !(record.IsForeign && placements.IsDeleted(record)) ? record : null;
+        }
+
+        /// <summary>True when the placement with this id (of any map of the mod) is a dependency's that the edited mod deletes.</summary>
+        public bool IsDeletedAny(string id)
+        {
+            var record = placements.FindForeign(id);
+            return record != null && placements.IsDeleted(record);
+        }
+
+        /// <summary>True when the placement (of any map) has its own <c>Interact.Teleport</c>; a teleport from its object has none.</summary>
+        public bool HasOwnTeleport(string id)
+        {
+            if (EventNode(id, out _) is { } entry) return entry["Teleport"] is JsonObject;
+            var record = AnyPlacement(id);
+            return record?.Data?["Interact"] is JsonObject interact && interact["Teleport"] is JsonObject;
+        }
 
         /// <summary>True when there is a step to undo.</summary>
         public bool CanUndo => maps.CanUndo;
@@ -260,6 +289,8 @@ namespace Cthangover.Tools.RpgEditor
 
             Begin();
             var id = placements.FreeId(MapId + "/" + localId);
+            while (Events.Any(e => e.Scope(MapId).Equals(id, StringComparison.OrdinalIgnoreCase)))
+                id = placements.FreeId(id + "_object");
             placements.Add(new JsonObject { ["Id"] = id, ["Object"] = objectId, ["X"] = x, ["Y"] = y });
             return id;
         }
@@ -267,6 +298,8 @@ namespace Cthangover.Tools.RpgEditor
         /// <summary>Moves a placement of this map to (<paramref name="x"/>, <paramref name="y"/>); a foreign one becomes its patch.</summary>
         public bool MovePlacement(string id, int x, int y)
         {
+            if (EventOf(id) is { } mapEvent)
+                return SetEventBounds(id, x, y, mapEvent.Width, mapEvent.Height);
             var record = PlacementOf(id);
             if (record?.Data == null || !InBounds(x, y))
                 return false;
@@ -277,6 +310,29 @@ namespace Cthangover.Tools.RpgEditor
             record.Data["Y"] = y;
             if (record.IsForeign)
                 placements.CommitForeign(record);
+            return true;
+        }
+
+        /// <summary>Changes an event's origin and footprint together as one undo step; foreign placements become patches.</summary>
+        public bool SetPlacementBounds(string id, int x, int y, int width, int height)
+        {
+            if (EventOf(id) != null) return SetEventBounds(id, x, y, width, height);
+            var record = PlacementOf(id);
+            if (record?.Data == null || width < 1 || height < 1 || !InBounds(x, y)
+                || width > Width - x || height > Height - y)
+                return false;
+            var footprint = record.Data["Footprint"] as JsonObject;
+            var size = footprint?["Size"] as JsonArray;
+            if (IntOf(record.Data, "X") == x && IntOf(record.Data, "Y") == y
+                && size?.Count == 2 && size[0]?.GetValue<int>() == width && size[1]?.GetValue<int>() == height)
+                return false;
+            Begin();
+            record.Data["X"] = x;
+            record.Data["Y"] = y;
+            footprint ??= new JsonObject();
+            if (record.Data["Footprint"] == null) record.Data["Footprint"] = footprint;
+            footprint["Size"] = new JsonArray(width, height);
+            if (record.IsForeign) placements.CommitForeign(record);
             return true;
         }
 
@@ -299,9 +355,42 @@ namespace Cthangover.Tools.RpgEditor
             return true;
         }
 
+        /// <summary>
+        /// Writes the target cell of the teleport of a placement of any map of the mod (plan 14.G18): <c>Interact.Teleport.X/Y</c>
+        /// of the placement. An own placement changes in its file, a foreign one as its patch. Used for the target of a teleport
+        /// on this map (its arrowhead) and for the arrival cell of a teleport from another map (the source placement). Returns
+        /// false when the placement has no teleport of its own (see <see cref="HasOwnTeleport"/>), is not in the document, or
+        /// already has the cell; then no step is made.
+        /// </summary>
+        public bool SetTeleportCell(string placementId, int x, int y)
+        {
+            if (EventNode(placementId, out var eventMap)?["Teleport"] is JsonObject eventTarget)
+            {
+                if (IntOf(eventTarget, "X") == x && IntOf(eventTarget, "Y") == y) return false;
+                Begin();
+                eventTarget["X"] = x;
+                eventTarget["Y"] = y;
+                if (eventMap.IsForeign) maps.CommitForeign(eventMap);
+                return true;
+            }
+            var record = AnyPlacement(placementId);
+            if (record?.Data == null || !HasOwnTeleport(placementId))
+                return false;
+            var teleport = (JsonObject)record.Data["Interact"]["Teleport"];
+            if (IntOf(teleport, "X") == x && IntOf(teleport, "Y") == y)
+                return false;
+            Begin();
+            teleport["X"] = x;
+            teleport["Y"] = y;
+            if (record.IsForeign)
+                placements.CommitForeign(record);
+            return true;
+        }
+
         /// <summary>Deletes a placement of this map: an own one is removed, a foreign one gets <c>"$delete": true</c>.</summary>
         public bool DeletePlacement(string id)
         {
+            if (EventOf(id) != null) return RemoveEvents(new[] { id });
             var record = PlacementOf(id);
             if (record == null || (record.IsForeign && placements.IsDeleted(record)))
                 return false;
@@ -397,6 +486,12 @@ namespace Cthangover.Tools.RpgEditor
             var clips = new List<RpgPlacementClip>();
             foreach (var id in ids ?? Enumerable.Empty<string>())
             {
+                if (EventNode(id, out _) is { } entry && EventOf(id) is { } mapEvent)
+                {
+                    clips.Add(new RpgPlacementClip { LocalId = mapEvent.Id, X = mapEvent.X, Y = mapEvent.Y,
+                        EventData = (JsonObject)entry.DeepClone() });
+                    continue;
+                }
                 var record = PlacementOf(id);
                 if (record?.Data == null || IsDeleted(record.Id))
                     continue;
@@ -446,6 +541,12 @@ namespace Cthangover.Tools.RpgEditor
                     Refuse($"paste does not fit: cell {x},{y} is off the map '{MapId}'");
                     return null;
                 }
+                if (clip.EventData != null)
+                {
+                    var entry = ReadEvent(clip.EventData);
+                    if (!EventFits(x, y, entry.Width, entry.Height)) return null;
+                    continue;
+                }
                 var form = clip.Object == null ? null : formOf?.Invoke(clip.Object);
                 if (form is not (RpgObjectForm.Sprite or RpgObjectForm.Actor))
                 {
@@ -456,10 +557,25 @@ namespace Cthangover.Tools.RpgEditor
 
             Begin();
             var ids = new List<string>();
+            var occupied = new HashSet<string>(SelectionIds, StringComparer.OrdinalIgnoreCase);
             foreach (var clip in clips)
             {
                 var local = string.IsNullOrWhiteSpace(clip.LocalId) || clip.LocalId.Contains('/') ? "copy" : clip.LocalId;
                 var id = placements.FreeId(MapId + "/" + local);
+                var suffix = 1;
+                while (occupied.Contains(id)) id = MapId + "/" + local + "_" + suffix++;
+                occupied.Add(id);
+                if (clip.EventData != null)
+                {
+                    var entry = (JsonObject)clip.EventData.DeepClone();
+                    entry["Id"] = id.Substring(MapId.Length + 1);
+                    entry["X"] = anchorX + clip.X - minX;
+                    entry["Y"] = anchorY + clip.Y - minY;
+                    if (Data["Events"] is not JsonArray events) { events = new JsonArray(); Data["Events"] = events; }
+                    events.Add(entry);
+                    ids.Add(id);
+                    continue;
+                }
                 var entity = new JsonObject
                 {
                     ["Id"] = id,
@@ -482,9 +598,14 @@ namespace Cthangover.Tools.RpgEditor
         public bool DeletePlacements(IEnumerable<string> ids)
         {
             var targets = (ids ?? Enumerable.Empty<string>()).Distinct().ToList();
-            if (!targets.Any(id => PlacementOf(id) is { } r && !(r.IsForeign && placements.IsDeleted(r))))
+            if (!targets.Any(id => EventOf(id) != null || PlacementOf(id) is { } r && !(r.IsForeign && placements.IsDeleted(r))))
                 return false;
             Begin();
+            // Change the map data inside the same transaction as the placement removals.
+            if (Data?["Events"] is JsonArray events)
+                foreach (var entry in events.OfType<JsonObject>().Where(e => targets.Contains(MapId + "/" + e["Id"]?.ToString())).ToList())
+                    events.Remove(entry);
+            if (IsForeign) maps.CommitForeign(Map);
             foreach (var id in targets)
             {
                 var record = PlacementOf(id);
@@ -598,7 +719,15 @@ namespace Cthangover.Tools.RpgEditor
 
         /// <summary>The problems that would break the game's data (duplicate or empty ids), as in <see cref="EntityDocument.Validate"/>.</summary>
         public List<(string Key, string Argument)> Validate()
-            => maps.Validate().Concat(placements.Validate()).ToList();
+        {
+            var result = maps.Validate().Concat(placements.Validate()).ToList();
+            var ids = new HashSet<string>(Placements.Where(r => !IsDeleted(r.Id)).Select(r => r.Id), StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in Events)
+                if (string.IsNullOrWhiteSpace(entry.Id) || entry.Id.Contains('/') || !ids.Add(entry.Scope(MapId))
+                    || !EventFits(entry.X, entry.Y, entry.Width, entry.Height))
+                    result.Add(("tools/rpg_editor/event_invalid", entry.Id ?? "?"));
+            return result;
+        }
 
         /// <summary>The edited map's data (the item as the game reads it, for a foreign map too); null when the map is gone.</summary>
         public JsonObject Data => Map?.Data;

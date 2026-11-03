@@ -56,6 +56,61 @@ namespace Cthangover.Tools.RpgEditor.Tests
             ModAssert.Null(entry["Name"], "an empty name leaves the name out");
         }
 
+        [ModTest("companion/join_lines_match_the_join_scenario_text")]
+        static void JoinLines(ModTestContext ctx)
+        {
+            // characters_editor writes "flag <id>_joined 1 / action party.add id=<id> / end" (CompanionScenario.Text).
+            var lines = RpgCharacterActors.JoinLines(Hero);
+            ModAssert.True(lines.SequenceEqual(new[] { "flag rpg_companion_joined 1", "action party.add id=rpg_companion" }),
+                "the join lines are the scenario's lines without end");
+        }
+
+        [ModTest("companion/join_after_an_own_dialog_keeps_the_dialog")]
+        static void JoinAfterDialog(ModTestContext ctx)
+        {
+            var dialog = "rpg_plus_game/dialog/lira";
+            var file = EmptyFile();
+            file["Items"]!.AsArray().Add(new JsonObject
+            {
+                ["Id"] = RpgCharacterActors.ObjectId(Mod, Hero),
+                ["Form"] = "actor",
+                ["Interact"] = new JsonObject { ["Trigger"] = "Use", ["Scenario"] = dialog },
+            });
+            RpgCharacterActors.Apply(file, Mod, Hero, "village/villager", "Lira", true);
+            var interact = Entry(file, RpgCharacterActors.ObjectId(Mod, Hero))?["Interact"];
+            ModAssert.Equal(dialog, interact?["Scenario"]?.GetValue<string>(), "the dialog stays the scenario, it plays first");
+            ModAssert.True(CommandsOf(interact).SequenceEqual(RpgCharacterActors.JoinLines(Hero)), "the join is appended after the dialog");
+            RpgCharacterActors.Apply(file, Mod, Hero, "village/villager", "Lira", true);
+            ModAssert.True(CommandsOf(Entry(file, RpgCharacterActors.ObjectId(Mod, Hero))?["Interact"]).Count == 2, "a second join does not repeat the lines");
+
+            RpgCharacterActors.Apply(file, Mod, Hero, "village/villager", "Lira", false);
+            var left = Entry(file, RpgCharacterActors.ObjectId(Mod, Hero))?["Interact"];
+            ModAssert.Equal(dialog, left?["Scenario"]?.GetValue<string>(), "unticking the join keeps the dialog");
+            ModAssert.Null(left?["Commands"], "and removes only the join lines");
+        }
+
+        [ModTest("companion/inline_commands_of_an_actor_survive_the_join")]
+        static void InlineCommands(ModTestContext ctx)
+        {
+            var file = EmptyFile();
+            file["Items"]!.AsArray().Add(new JsonObject
+            {
+                ["Id"] = RpgCharacterActors.ObjectId(Mod, Hero),
+                ["Form"] = "actor",
+                ["Interact"] = new JsonObject { ["Trigger"] = "Use", ["Commands"] = new JsonArray("ptext \"Hi.\" key=lira/hi") },
+            });
+            RpgCharacterActors.Apply(file, Mod, Hero, "village/villager", "Lira", true);
+            var commands = CommandsOf(Entry(file, RpgCharacterActors.ObjectId(Mod, Hero))?["Interact"]);
+            ModAssert.True(commands.SequenceEqual(new[] { "ptext \"Hi.\" key=lira/hi", "flag rpg_companion_joined 1", "action party.add id=rpg_companion" }),
+                "the own line first, the join after it");
+            RpgCharacterActors.Apply(file, Mod, Hero, "village/villager", "Lira", false);
+            var kept = CommandsOf(Entry(file, RpgCharacterActors.ObjectId(Mod, Hero))?["Interact"]);
+            ModAssert.True(kept.SequenceEqual(new[] { "ptext \"Hi.\" key=lira/hi" }), "unticking keeps the own line only");
+        }
+
+        private static List<string> CommandsOf(JsonNode interact)
+            => (interact?["Commands"] as JsonArray)?.Select(c => c.GetValue<string>()).ToList() ?? new List<string>();
+
         [ModTest("companion/applying_twice_updates_one_entry_and_keeps_the_others")]
         static void Idempotent(ModTestContext ctx)
         {
@@ -69,6 +124,24 @@ namespace Cthangover.Tools.RpgEditor.Tests
             RpgCharacterActors.Apply(file, Mod, Hero, "village/villager", "Lira", false);
             ModAssert.Null(Entry(file, RpgCharacterActors.ObjectId(Mod, Hero))?["Interact"], "a later call without a join takes it away again");
             ModAssert.True(file["Items"]!.AsArray().Count == 2, "still one entry per character after the change");
+        }
+
+        [ModTest("companion/an_actor_object_says_when_its_character_joins")]
+        static void JoinOfObject(ModTestContext ctx)
+        {
+            var id = RpgCharacterActors.ObjectId(Mod, Hero);
+            var key = Mod + "/party/" + Hero;
+            var byScenario = new RpgInteract { Trigger = RpgInteractTrigger.Use, Scenario = key };
+            ModAssert.True(RpgCharacterActors.TryJoinOf(id, byScenario, out var scenario, out var lines), "an actor whose interaction runs the join joins");
+            ModAssert.Equal(key, scenario, "its join scenario is the party scenario");
+            ModAssert.True(lines.SequenceEqual(RpgCharacterActors.JoinLines(Hero)), "its join lines are the join's lines");
+            ModAssert.True(RpgCharacterActors.TryJoinOf(id, new RpgInteract { Commands = new List<string>(lines) }, out _, out _),
+                "the join lines alone are a join too");
+            ModAssert.False(RpgCharacterActors.TryJoinOf(id, new RpgInteract { Scenario = Mod + "/dialog/lira" }, out _, out _),
+                "a dialog without the join lines is not a join");
+            ModAssert.False(RpgCharacterActors.TryJoinOf(id, null, out _, out _), "an actor without an interaction does not join");
+            ModAssert.False(RpgCharacterActors.TryJoinOf("village_pack/marker/trigger", byScenario, out _, out _), "another object is not an actor");
+            ModAssert.False(RpgCharacterActors.TryJoinOf(Mod + "/character/", byScenario, out _, out _), "an actor without a character id does not join");
         }
 
         [ModTest("preview/self_names_come_from_the_interaction_and_the_states")]

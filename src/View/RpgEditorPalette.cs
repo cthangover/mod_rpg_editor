@@ -79,6 +79,15 @@ namespace Cthangover.Tools.RpgEditor
         {
             foreach (var form in Forms)
                 lists[form].SetItems(Rows(objects, form, picture, charset));
+            RebuildCharacters(picture, charset);
+        }
+
+        /// <summary>
+        /// Fills the characters tab again from the characters that exist now: a character saved in its editor while the
+        /// map editor is open appears here at once (plan 14.G17). The other tabs keep their rows and selection.
+        /// </summary>
+        public void RebuildCharacters(Func<string, Texture2D> picture, Func<string, Texture2D> charset)
+        {
             characters?.SetItems(CharacterRows(picture, charset));
         }
 

@@ -59,6 +59,7 @@ namespace Cthangover.Tools.RpgEditor
         private OptionButton dirPicker;
         private OptionButton scenarioPicker;
         private OptionButton shopPicker;
+        private bool placementJoins;
 
         /// <summary>Snapshot the column shows: nothing selected and no document is fine.</summary>
         public sealed class State
@@ -75,11 +76,17 @@ namespace Cthangover.Tools.RpgEditor
             /// <summary>The selected placement's interaction as the game reads it (its object's, with the placement's override), or null.</summary>
             public RpgInteract Interact { get; init; }
 
+            /// <summary>The object's own interaction, without any placement's override (it tells a character actor that joins), or null.</summary>
+            public RpgInteract ObjectInteract { get; init; }
+
             /// <summary>Teleports that leave this map.</summary>
             public IReadOnlyList<RpgTeleportLink> Outgoing { get; init; } = Array.Empty<RpgTeleportLink>();
 
             /// <summary>Teleports that lead into this map.</summary>
             public IReadOnlyList<RpgTeleportLink> Incoming { get; init; } = Array.Empty<RpgTeleportLink>();
+
+            /// <summary>The incoming teleport selected on the canvas (its arrival on this map), or null (plan 14.G18).</summary>
+            public RpgTeleportLink Arrival { get; init; }
 
             /// <summary>Map size shown in the map section.</summary>
             public Vector2I MapSize { get; init; }
@@ -115,6 +122,9 @@ namespace Cthangover.Tools.RpgEditor
         /// <summary>The interaction of a placement changed: the placement id and the wanted interaction (null for none).</summary>
         public event Action<string, RpgInteract> InteractChanged;
 
+        /// <summary>One explicit Apply of the independent event form, preserving its stable id.</summary>
+        public event Action<string, JsonObject> EventChanged;
+
         /// <summary>The target cell of a teleport is to be picked on the canvas: the placement id and the target map id.</summary>
         public event Action<string, string> TargetPickRequested;
 
@@ -132,7 +142,11 @@ namespace Cthangover.Tools.RpgEditor
                 return;
             }
             AddChild(ToolUi.Section("tools/rpg_editor/inspector_title"));
-            if (state.Placement != null)
+            if (state.Arrival != null)
+                AddArrival(state.Arrival);
+            else if (state.Document.EventOf(state.Placement) is { } mapEvent)
+                AddEvent(state, mapEvent);
+            else if (state.Placement != null)
                 AddPlacement(state);
             else
                 AddChild(ToolUi.Hint(ToolUi.Tr("tools/rpg_editor/placement_none")));
@@ -199,10 +213,15 @@ namespace Cthangover.Tools.RpgEditor
         private void AddInteract(VBoxContainer box, State state)
         {
             var id = state.Placement;
-            var kind = RpgInteractEdit.KindOf(state.Interact);
+            // A character actor that joins keeps its join after the author's part (plan 14.G16): the pickers read only that part.
+            placementJoins = RpgCharacterActors.TryJoinOf(state.ObjectId, state.ObjectInteract, out var joinScenario, out var joinLines);
+            var own = placementJoins ? RpgInteractEdit.WithoutJoin(state.Interact, joinScenario, joinLines) : state.Interact;
+            var kind = RpgInteractEdit.KindOf(own);
             box.AddChild(ToolUi.Section("tools/rpg_editor/interact_title"));
             box.AddChild(ToolUi.Hint(ToolUi.Tr("tools/rpg_editor/interact_hint")));
-            box.AddChild(ToolUi.Hint(DescribeInteract(state.Interact, kind)));
+            if (placementJoins)
+                box.AddChild(ToolUi.Hint(ToolUi.Tr(RpgInteractEdit.JoinNoticeKey(kind))));
+            box.AddChild(ToolUi.Hint(DescribeInteract(own, kind)));
 
             kindChoices.Clear();
             kindChoices.AddRange(PickableKinds);
@@ -234,11 +253,11 @@ namespace Cthangover.Tools.RpgEditor
             {
                 case RpgInteractKind.Item:
                     itemPicker = Picker("InteractItem", "tools/rpg_editor/interact_item_tip");
-                    FillEntities(itemPicker, ItemKind, RpgInteractEdit.ItemOf(state.Interact));
+                    FillEntities(itemPicker, ItemKind, RpgInteractEdit.ItemOf(own));
                     ToolUi.Field(box, "tools/rpg_editor/interact_item", itemPicker, "tools/rpg_editor/interact_item_tip");
                     countSpin = ToolUi.Number(1, 999, 1, null);
                     countSpin.Name = "InteractCount";
-                    countSpin.Value = RpgInteractEdit.CountOf(state.Interact);
+                    countSpin.Value = RpgInteractEdit.CountOf(own);
                     countSpin.ValueChanged += _ => EmitInteract(id);
                     ToolUi.Field(box, "tools/rpg_editor/interact_count", countSpin);
                     itemPicker.ItemSelected += _ => EmitInteract(id);
@@ -272,13 +291,13 @@ namespace Cthangover.Tools.RpgEditor
                     break;
                 case RpgInteractKind.Dialog:
                     scenarioPicker = Picker("InteractScenario", "tools/rpg_editor/interact_scenario_tip");
-                    FillScenarios(scenarioPicker, state.Interact?.Scenario);
+                    FillScenarios(scenarioPicker, own?.Scenario);
                     ToolUi.Field(box, "tools/rpg_editor/interact_scenario", scenarioPicker, "tools/rpg_editor/interact_scenario_tip");
                     scenarioPicker.ItemSelected += _ => EmitInteract(id);
                     break;
                 case RpgInteractKind.Shop:
                     shopPicker = Picker("InteractShop", "tools/rpg_editor/interact_shop_tip");
-                    FillEntities(shopPicker, ShopKind, RpgInteractEdit.ShopOf(state.Interact));
+                    FillEntities(shopPicker, ShopKind, RpgInteractEdit.ShopOf(own));
                     ToolUi.Field(box, "tools/rpg_editor/interact_shop", shopPicker, "tools/rpg_editor/interact_shop_tip");
                     shopPicker.ItemSelected += _ => EmitInteract(id);
                     break;
@@ -324,7 +343,8 @@ namespace Cthangover.Tools.RpgEditor
                     wanted = RpgInteractEdit.Make(kind, trigger, shop, 1, null);
                     break;
                 default:
-                    wanted = null;
+                    // "Nothing" on a joining actor keeps the trigger: the join stays, Apply adds its lines.
+                    wanted = placementJoins ? new RpgInteract { Trigger = trigger } : null;
                     break;
             }
             InteractChanged?.Invoke(placement, wanted);
@@ -346,7 +366,7 @@ namespace Cthangover.Tools.RpgEditor
                 case RpgInteractKind.Custom:
                     return ToolUi.Tr("tools/rpg_editor/interact_now_custom");
                 default:
-                    return ToolUi.Tr("tools/rpg_editor/interact_now_none");
+                    return ToolUi.Tr(placementJoins ? "tools/rpg_editor/interact_now_join" : "tools/rpg_editor/interact_now_none");
             }
         }
 
@@ -466,6 +486,26 @@ namespace Cthangover.Tools.RpgEditor
         }
 
         private static JsonNode Text(string text) => string.IsNullOrEmpty(text) ? null : JsonValue.Create(text);
+
+        /// <summary>
+        /// The arrival selected on the canvas (plan 14.G18): the map it comes from and the placement that holds the teleport, with a
+        /// button that opens that map. A drag of its arrow moves the arrival cell, which the placement writes in its own map.
+        /// </summary>
+        private void AddArrival(RpgTeleportLink link)
+        {
+            AddChild(ToolUi.Section("tools/rpg_editor/arrival_title"));
+            AddChild(ToolUi.Hint(string.Format(ToolUi.Tr("tools/rpg_editor/arrival_from"), link.Map, link.Placement, link.X, link.Y)));
+            AddChild(ToolUi.Hint(ToolUi.Tr("tools/rpg_editor/arrival_hint")));
+            var open = new Button
+            {
+                Text = string.Format(ToolUi.Tr("tools/rpg_editor/arrival_open"), link.Map),
+                Alignment = HorizontalAlignment.Left,
+                ClipText = true,
+                FocusMode = Control.FocusModeEnum.None,
+            };
+            open.Pressed += () => LinkOpened?.Invoke(link.Map, link.X, link.Y);
+            AddChild(open);
+        }
 
         private void AddLinks(State state)
         {

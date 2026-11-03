@@ -1,0 +1,17 @@
+{
+  "Kind": "rpg_placement",
+  "Items": [
+    {
+      "Id": "rpg_editor_areas/event",
+      "Object": "rpg_editor__areas/event",
+      "X": 4,
+      "Y": 3
+    },
+    {
+      "Id": "rpg_editor_areas/chest",
+      "Object": "village_pack/chest",
+      "X": 7,
+      "Y": 5
+    }
+  ]
+}

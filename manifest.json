@@ -32,6 +32,30 @@
       "activate": [
         "--itest=rpg_companion_edit"
       ]
+    },
+    {
+      "id": "tutorial",
+      "activate": [
+        "--itest=tutorial_first_game"
+      ]
+    },
+    {
+      "id": "tutorial_play",
+      "activate": [
+        "--itest=tutorial_first_game_play"
+      ]
+    },
+    {
+      "id": "areas",
+      "activate": [
+        "--itest=rpg_editor_areas"
+      ]
+    },
+    {
+      "id": "events",
+      "activate": [
+        "--itest=rpg_map_events"
+      ]
     }
   ]
 }

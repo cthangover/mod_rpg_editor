@@ -22,7 +22,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
         static void MovedIsMinimal(ModTestContext ctx)
         {
             var game = RpgEditorFixture.ReadModJson(RpgEditorFixture.GameMod);
-            var (maps, placements) = RpgEditorFixture.GameEntities(game);
+            var (maps, placements) = RpgEditorFixture.LegacyGameEntities(game);
             var merchant = placements.First(p => p.Id == Merchant);
             var writtenBefore = merchant.Written.ToJsonString();
             var x = merchant.Written["X"].GetValue<int>();
@@ -44,7 +44,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
         static void SecondMoveAndReset(ModTestContext ctx)
         {
             var game = RpgEditorFixture.ReadModJson(RpgEditorFixture.GameMod);
-            var (maps, placements) = RpgEditorFixture.GameEntities(game);
+            var (maps, placements) = RpgEditorFixture.LegacyGameEntities(game);
             var merchant = placements.First(p => p.Id == Merchant);
             var x = merchant.Written["X"].GetValue<int>();
             var doc = RpgEditorFixture.Open(new (string Path, string Text)[0], maps, MapOfVillage, placements);
@@ -63,7 +63,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
         static void ResetRemovesFile(ModTestContext ctx)
         {
             var game = RpgEditorFixture.ReadModJson(RpgEditorFixture.GameMod);
-            var (maps, placements) = RpgEditorFixture.GameEntities(game);
+            var (maps, placements) = RpgEditorFixture.LegacyGameEntities(game);
             var existing = new[] { (PatchPlacements, "{\"Items\": [{\"Id\": \"" + Merchant + "\", \"X\": 30}]}") };
             var doc = RpgEditorFixture.Open(existing, maps, MapOfVillage, placements);
             ModAssert.Equal(30, doc.Placements.First(p => p.Id == Merchant).Data["X"].GetValue<int>(), "the saved patch moves the merchant");
@@ -80,7 +80,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
         static void DeleteWritesDelete(ModTestContext ctx)
         {
             var game = RpgEditorFixture.ReadModJson(RpgEditorFixture.GameMod);
-            var (maps, placements) = RpgEditorFixture.GameEntities(game);
+            var (maps, placements) = RpgEditorFixture.LegacyGameEntities(game);
             var doc = RpgEditorFixture.Open(new (string Path, string Text)[0], maps, MapOfVillage, placements);
 
             ModAssert.True(doc.DeletePlacement(Door), "the door is deleted for this mod");
@@ -94,7 +94,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
         static void UndoAndRedo(ModTestContext ctx)
         {
             var game = RpgEditorFixture.ReadModJson(RpgEditorFixture.GameMod);
-            var (maps, placements) = RpgEditorFixture.GameEntities(game);
+            var (maps, placements) = RpgEditorFixture.LegacyGameEntities(game);
             var merchant = placements.First(p => p.Id == Merchant);
             var x = merchant.Written["X"].GetValue<int>();
             var doc = RpgEditorFixture.Open(new (string Path, string Text)[0], maps, MapOfVillage, placements);
@@ -110,7 +110,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
         static void NewPlacementRefused(ModTestContext ctx)
         {
             var game = RpgEditorFixture.ReadModJson(RpgEditorFixture.GameMod);
-            var (maps, placements) = RpgEditorFixture.GameEntities(game);
+            var (maps, placements) = RpgEditorFixture.LegacyGameEntities(game);
             var doc = RpgEditorFixture.Open(new (string Path, string Text)[0], maps, MapOfVillage, placements);
             ModAssert.Null(doc.AddPlacement("torch", RpgEditorFixture.Trigger, 1, 1), "a package does not place on another mod's map");
             ModAssert.Equal(0, doc.Changes().Count, "nothing is written");
@@ -120,7 +120,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
         static void GroundStrokeIsPatched(ModTestContext ctx)
         {
             var game = RpgEditorFixture.ReadModJson(RpgEditorFixture.GameMod);
-            var (maps, placements) = RpgEditorFixture.GameEntities(game);
+            var (maps, placements) = RpgEditorFixture.LegacyGameEntities(game);
             var doc = RpgEditorFixture.Open(new (string Path, string Text)[0], maps, MapOfVillage, placements);
             var mapBefore = maps.First(m => m.Id == MapOfVillage).Written.ToJsonString();
 

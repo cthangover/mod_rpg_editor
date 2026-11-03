@@ -191,6 +191,51 @@ namespace Cthangover.Tools.RpgEditor.Tests
             ModAssert.True(new Vector2(2.5f, 2.5f) == arrows[3].To, "an incoming arrow ends on the arrival cell");
         }
 
+        [ModTest("interact/a_join_keeps_the_join_after_the_chosen_part")]
+        static void JoinAfterPick(ModTestContext ctx)
+        {
+            const string joinKey = "rpg_plus_game/party/rpg_companion";
+            var lines = RpgCharacterActors.JoinLines("rpg_companion");
+
+            var dialog = RpgInteractEdit.WithJoin(RpgInteractEdit.Make(RpgInteractKind.Dialog, RpgInteractTrigger.Use, Dialog, 1, null), lines);
+            ModAssert.Equal(Dialog, dialog.Scenario, "the chosen dialog is the scenario, so it plays first");
+            ModAssert.True(dialog.Commands.SequenceEqual(lines), "the join lines follow the dialog");
+            ModAssert.True(RpgInteractKind.Dialog == RpgInteractEdit.KindOf(RpgInteractEdit.WithoutJoin(dialog, joinKey, lines)),
+                "without the join the placement still reads as its dialog");
+            var written = RpgInteractEdit.OverrideOf(dialog, new RpgInteract { Scenario = joinKey }) as JsonObject;
+            ModAssert.Equal(Dialog, written?["Scenario"]?.ToString(), "the placement writes the dialog over the join scenario");
+            ModAssert.True(written?["Commands"] is JsonArray writtenLines && writtenLines.Count == 2, "and both join lines");
+
+            var nothing = RpgInteractEdit.WithJoin(null, lines);
+            ModAssert.Null(nothing.Scenario, "nothing chosen gives no dialog");
+            ModAssert.True(nothing.Commands.SequenceEqual(lines), "only the join remains");
+            ModAssert.True(RpgInteractKind.None == RpgInteractEdit.KindOf(RpgInteractEdit.WithoutJoin(nothing, joinKey, lines)),
+                "the placement reads as nothing");
+
+            var item = RpgInteractEdit.WithJoin(RpgInteractEdit.Make(RpgInteractKind.Item, RpgInteractTrigger.Use, Elixir, 2, null), lines);
+            ModAssert.Equal(3, item.Commands.Count, "an item is given, then the join");
+            ModAssert.Equal(Elixir, RpgInteractEdit.ItemOf(RpgInteractEdit.WithoutJoin(item, joinKey, lines)), "the item reads back without the join");
+            ModAssert.Equal(2, RpgInteractEdit.CountOf(RpgInteractEdit.WithoutJoin(item, joinKey, lines)), "its count reads back without the join");
+
+            var door = RpgInteractEdit.Make(RpgInteractKind.Map, RpgInteractTrigger.Use, null, 1,
+                new RpgTeleport { Map = Door, X = 3, Y = 4, Dir = RpgDirection.Up });
+            ModAssert.True(ReferenceEquals(RpgInteractEdit.WithJoin(door, lines), door), "a teleport is not joined: the game runs it alone");
+            ModAssert.Null(RpgInteractEdit.WithoutJoin(null, joinKey, lines), "no interaction stays none");
+        }
+
+        [ModTest("interact/join_note_by_kind")]
+        static void JoinNoteByKind(ModTestContext ctx)
+        {
+            const string Hint = "tools/rpg_editor/interact_join_hint";
+            const string Lost = "tools/rpg_editor/interact_join_lost";
+            ModAssert.Equal(Hint, RpgInteractEdit.JoinNoticeKey(RpgInteractKind.None), "nothing chosen: the character joins after nothing, the hint");
+            ModAssert.Equal(Hint, RpgInteractEdit.JoinNoticeKey(RpgInteractKind.Dialog), "a dialog keeps the join: the hint");
+            ModAssert.Equal(Hint, RpgInteractEdit.JoinNoticeKey(RpgInteractKind.Item), "an item keeps the join: the hint");
+            ModAssert.Equal(Hint, RpgInteractEdit.JoinNoticeKey(RpgInteractKind.Shop), "a shop keeps the join: the hint");
+            ModAssert.Equal(Hint, RpgInteractEdit.JoinNoticeKey(RpgInteractKind.Custom), "a custom interaction keeps the join: the hint");
+            ModAssert.Equal(Lost, RpgInteractEdit.JoinNoticeKey(RpgInteractKind.Map), "a teleport loses the join: the warning");
+        }
+
         private static RpgInteract EffectiveInteract(RpgMapDocument doc, string id, Func<string, RpgObject> objects)
         {
             var record = doc.Placements.First(r => r.Id == id);

@@ -1,0 +1,28 @@
+{
+  "Kind": "rpg_map",
+  "Items": [
+    {
+      "Id": "rpg_map_events_test",
+      "Width": 10,
+      "Height": 8,
+      "Legend": {
+        "g": "village_pack/ground/grass"
+      },
+      "Ground": [
+        "gggggggggg",
+        "gggggggggg",
+        "gggggggggg",
+        "gggggggggg",
+        "gggggggggg",
+        "gggggggggg",
+        "gggggggggg",
+        "gggggggggg"
+      ],
+      "Spawn": {
+        "X": 1,
+        "Y": 2
+      },
+      "Ambient": "#ffffff"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Independent map event authoring",
+  "sources": [
+    "src/*.cs"
+  ],
+  "depends": [
+    "rpg_plus_game>=1",
+    "rpg_object_editor>=1"
+  ]
+}

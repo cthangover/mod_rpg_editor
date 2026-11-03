@@ -72,7 +72,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
         static void PatchedAndDeleted(ModTestContext ctx)
         {
             var game = RpgEditorFixture.ReadModJson(RpgEditorFixture.GameMod);
-            var (maps, placements) = RpgEditorFixture.GameEntities(game);
+            var (maps, placements) = RpgEditorFixture.LegacyGameEntities(game);
             var doc = RpgEditorFixture.Open(new (string Path, string Text)[0], maps, "rpg_village", placements);
             const string merchant = "rpg_village/merchant";
             const string door = "rpg_village/door_merchant";

@@ -1,0 +1,9 @@
+{
+  "name": "RPG event areas and collision test",
+  "sources": [
+    "src/*.cs"
+  ],
+  "depends": [
+    "rpg_plus_game>=1"
+  ]
+}

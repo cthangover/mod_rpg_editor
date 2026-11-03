@@ -1,0 +1,14 @@
+{
+  "name": "Tutorial First Game Play Test",
+  "description": "Steps 2 to 10 of the tutorial \"Your first game in 10 minutes\" (rpg_editor docs, plan 14.G15), clicked: on the mod tutorial_first_game that the previous suite made, the RPG map editor makes a map with its + button (the ModFileSelector dialog), paints the ground, places the houses and trees, and then the rest of the path. The game then plays the map from the editor. Every created file belongs to the mod folder, which this suite removes at the end together with the user collections, restored byte for byte from the marker the previous suite wrote. Activated by --itest=tutorial_first_game_play with --game=rpg_plus --new (--shots=<dir> saves the steps' pictures).",
+  "sources": [
+    "src/*.cs"
+  ],
+  "depends": [
+    "rpg_plus_game>=1",
+    "rpg_editor>=1",
+    "scenario_editor>=1",
+    "characters_editor>=1",
+    "schema_tools>=1"
+  ]
+}

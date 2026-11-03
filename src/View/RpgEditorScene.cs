@@ -41,6 +41,12 @@ namespace Cthangover.Tools.RpgEditor
         /// <summary>The placements drawn as actors (a pose on their cell): id, effective object, cell.</summary>
         public List<(string Id, RpgObject Object, int X, int Y)> Actors { get; } = new();
 
+        /// <summary>Event geometry for editor overlays and picking; excluded from the rendered scene.</summary>
+        public List<(string Id, RpgObject Object, int X, int Y)> Events { get; } = new();
+
+        /// <summary>All selectable rectangles, including invisible events.</summary>
+        public IEnumerable<(string Id, RpgObject Object, int X, int Y)> Editables => Statics.Concat(Actors).Concat(Events);
+
         /// <summary>
         /// Builds the scene of <paramref name="doc"/>. <paramref name="objects"/> resolves an object id (null for an
         /// unknown one); a placement of an unknown object or one that is neither a sprite nor an actor is left out.
@@ -63,10 +69,20 @@ namespace Cthangover.Tools.RpgEditor
                 if (eff.Form == RpgObjectForm.Actor)
                 {
                     scene.Actors.Add((placement.ID, eff, placement.X, placement.Y));
+                    scene.Walk.AddStatic(eff, placement.X, placement.Y);
                     continue;
                 }
                 scene.Statics.Add((placement.ID, eff, placement.X, placement.Y));
                 scene.Walk.AddStatic(eff, placement.X, placement.Y);
+            }
+            foreach (var entry in map.Events ?? new List<RpgMapEvent>())
+            {
+                var obj = entry.AsObject();
+                scene.effective[entry.Scope(map.ID)] = obj;
+                scene.Events.Add((entry.Scope(map.ID), obj, entry.X, entry.Y));
+                // Conditions are previewed as available, like placement states in this editor.
+                obj.Hidden = false;
+                scene.Walk.AddStatic(obj, entry.X, entry.Y);
             }
             return scene;
         }

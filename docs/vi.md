@@ -4,6 +4,16 @@ Trình chỉnh sửa bản đồ RPG thay đổi các bản đồ ô gạch củ
 
 Mở từ hộp công cụ (cái búa trên thanh công cụ) với tên **RPG Map Editor**. Cửa sổ mở trên bản đồ mà trò chơi đang hiển thị; muốn mở bản đồ khác, dùng bộ chọn bản đồ.
 
+## Tạo sự kiện và đối tượng ngay trên bản đồ
+
+Nhấn **Sự kiện** rồi kéo hình chữ nhật. Chọn **Khi bước lên** hoặc **Khi dùng (E / F)**, nhập lệnh, nhấn **Áp dụng sự kiện** rồi lưu. Không cần tạo đối tượng hoặc tệp kịch bản riêng.
+
+Dùng công cụ chọn để di chuyển hoặc kéo góc đổi kích thước trong cả hai phép chiếu. Tùy chọn bổ sung có điều kiện, kịch bản chung và dịch chuyển. Với sự kiện một lần, dùng điều kiện `self.done != 1` và kết thúc bằng `flag self.done 1`. Sự kiện không có hình ảnh và mặc định không chặn đường.
+
+Nhấn **Đối tượng mới…** dưới bảng chọn để mở biểu mẫu trong mod của bản đồ. Chọn ảnh và tương tác, lưu rồi chọn đối tượng trong bảng vừa cập nhật để đặt lên bản đồ.
+
+![Vùng, điều kiện kích hoạt và kịch bản ngắn trong cùng một trình sửa.](assets/map-event.png)
+
 ## Bạn thấy gì trong cửa sổ
 
 ![RPG Map Editor trên ngôi nhà của trưởng làng trong RPG Plus: thanh công cụ có bộ chọn bản đồ, Save, Undo, Redo và các công cụ; bảng vật thể bên trái với tab Surfaces; bản đồ ở giữa; bảng thuộc tính bên phải có kích thước bản đồ, điểm xuất hiện, liên kết dịch chuyển và trận chiến.](assets/rpg-editor-open.jpg)

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Cthangover.Core.Bootstrap;
 using Cthangover.Core.Characters;
 using Cthangover.Core.Games;
@@ -24,9 +26,9 @@ namespace Cthangover.Tools.RpgEditor.Tests
     /// <summary>
     /// Plays the characters on an RPG map (plan 14.G7, 14.G11) like an author, then a player. The map editor makes a new map. The join
     /// scenario of a character is written into the mod first (the file the characters editor writes), then the Characters tab of the
-    /// palette is chosen: the character is placed as its actor object, saved with the map. In the same window the state preview of a
+    /// palette is chosen: the character is placed as its actor object, saved with the map. The author gives the placed companion a dialog in the inspector (Does → Opens a dialog): the dialog plays first, then the join lines run. In the same window the state preview of a
     /// barrel ticks its <c>self.open</c> flag and the state that applies is shown; the preview writes nothing. Then the game plays the
-    /// saved map: the actor stands on its cell, talking to it joins the party, the actor leaves its cell and the companion walks behind
+    /// saved map: the actor stands on its cell, talking to it plays its dialog and then joins the party, the actor leaves its cell and the companion walks behind
     /// the hero. Afterwards the new map's files, the actor entry and the join scenario are removed; every other file of the mod is
     /// compared with its text from the start.
     /// <para/>
@@ -43,6 +45,11 @@ namespace Cthangover.Tools.RpgEditor.Tests
         private const string JoinKey = Mod + "/party/" + Companion;
         private const string JoinPath = "scenarios/" + JoinKey + ".scenario";
         private const string JoinText = "flag rpg_companion_joined 1\naction party.add id=rpg_companion\nend\n";
+        private static readonly string[] JoinCommands = { "flag rpg_companion_joined 1", "action party.add id=rpg_companion" };
+        private const string DialogKey = Mod + "/party/" + Companion + "_talk";
+        private const string DialogPath = "scenarios/" + DialogKey + ".scenario";
+        private const string DialogText = "ptext \"Лина смотрит на отряд и думает, идти ли с героем.\"\nflag rpg_companion_talked 1\n";
+        private const string TalkedFlag = "rpg_companion_talked";
         private const string ActorObject = Mod + "/character/" + Companion;
         private const string ActorsFile = "objects/characters.json";
         private const string Grass = "village_pack/ground/grass";
@@ -113,14 +120,18 @@ namespace Cthangover.Tools.RpgEditor.Tests
             Do(() => Check(ModFileService.WriteText(Mod, JoinPath, JoinText), "the join scenario is written into the mod"));
             Do(() => ModManager.Instance.GetResolver<ScenarioResolver>()?.ClearCache());
 
-            // The Characters tab: the character is chosen; its actor object is written and placed like any actor.
+            // The dialog of the companion is a scenario of its own; the author gives it to the placed companion in the inspector.
+            Do(() => Check(ModFileService.WriteText(Mod, DialogPath, DialogText), "the companion's dialog scenario is written into the mod"));
+            Do(() => ModManager.Instance.GetResolver<ScenarioResolver>()?.ClearCache());
+
+            // The Characters tab: the character is chosen; its actor object is written with the join only, and placed like any actor.
             Do(() =>
             {
                 Check(window.Palette.FindChild("Palette_Characters", true, false) is FilteredList, "the palette has a Characters tab");
                 ChooseCharacter(Companion);
                 var objects = ModFileService.ReadText(Mod, ActorsFile) ?? string.Empty;
                 Check(objects.Contains("\"Id\": \"" + ActorObject + "\"") && objects.Contains("\"Scenario\": \"" + JoinKey + "\""),
-                    "choosing the character writes its actor object with the join interaction");
+                    "choosing the character writes its actor object with the join scenario");
                 Check(window.Tool == RpgEditorTool.Place && window.PlaceObject == ActorObject, "the actor is ready to be placed");
             });
             Do(() =>
@@ -128,7 +139,34 @@ namespace Cthangover.Tools.RpgEditor.Tests
                 Click(ActorCell);
                 actorId = window.SelectedId;
                 Check(actorId != null && window.Document.Placements.Any(r => r.Id == actorId), "a click places the actor on the map");
-                Check(window.Scene.ObjectOf(actorId)?.Interact?.Scenario == JoinKey, "the placed actor talks to the join scenario");
+                Check(window.Scene.ObjectOf(actorId)?.Interact?.Scenario == JoinKey, "the placed actor only joins: it has no dialog of its own yet");
+            });
+
+            // The inspector gives the placed companion a dialog: Does → Opens a dialog, then the dialog is picked (plan 14.G16).
+            Do(() =>
+            {
+                var kind = window.FindChild("InteractKind", true, false) as OptionButton;
+                Check(kind != null && kind.GetItemText(kind.Selected) == Translate("tools/rpg_editor/interact_kind_none"),
+                    "the inspector reads the actor as Nothing: only the join is left");
+                Check(HasLabel(Translate("tools/rpg_editor/interact_join_hint")), "the inspector says the character joins the party after the dialog");
+                if (kind != null)
+                    PickItem(kind, Translate("tools/rpg_editor/interact_kind_dialog"), null);
+            });
+            Do(() =>
+            {
+                var scenario = window.FindChild("InteractScenario", true, false) as OptionButton;
+                Check(scenario != null, "choosing Opens a dialog shows the dialog picker");
+                if (scenario != null)
+                    PickItem(scenario, null, DialogKey);
+            });
+            Do(() =>
+            {
+                var kind = window.FindChild("InteractKind", true, false) as OptionButton;
+                Check(kind != null && kind.GetItemText(kind.Selected) == Translate("tools/rpg_editor/interact_kind_dialog"),
+                    "the placement reads back as a dialog, not as a custom interaction");
+                var interact = window.Scene.ObjectOf(actorId)?.Interact;
+                Check(interact?.Scenario == DialogKey, "the placed actor talks to the dialog picked in the inspector");
+                Check(interact?.Commands?.SequenceEqual(JoinCommands) == true, "and the join lines follow the dialog");
             });
 
             // The state preview of a barrel: self.open is ticked and the state that applies is shown; nothing is written.
@@ -177,9 +215,12 @@ namespace Cthangover.Tools.RpgEditor.Tests
             // Talking to the actor joins the party; the actor leaves its cell.
             Do(() => View.PlacePlayer(TalkFrom.X, TalkFrom.Y, RpgDirection.Right));
             Until(() => View.Player.Cell == TalkFrom && !View.Player.IsMoving, "the hero stands next to the companion", 40);
-            Do(() => Check(View.Interact(), "in game, talking to the companion starts its join scenario"));
+            Do(() => Check(View.Interact(), "in game, talking to the companion starts its dialog"));
+            // The dialog waits on its first line: the join lines come after the dialog, so nothing of them has run yet.
+            Do(() => Check(Flag(JoinedFlag) == null && Flag(TalkedFlag) == null, "the dialog plays first: the join has not run while its first line waits"));
             ClickDialogs(300, "the join ends");
-            Do(() => Check(Flag(JoinedFlag) == "1", "the join scenario set the joined flag"));
+            Do(() => Check(Flag(TalkedFlag) == "1", "the dialog played first: its flag is set"));
+            Do(() => Check(Flag(JoinedFlag) == "1", "then the join lines set the joined flag"));
             Do(() => Check(Roster.BattleSet.Contains(Companion), "party.add put the companion into the battle set"));
             Until(() => View.Find(actorId)?.Visible == false, "the companion leaves its cell once joined", 60);
             Do(() => Check(RpgPartyLook.Followers().Any(f => f.Id == Companion), "the companion follows the hero"));
@@ -256,12 +297,34 @@ namespace Cthangover.Tools.RpgEditor.Tests
             Fail($"the Characters tab offers {id}");
         }
 
+        /// <summary>
+        /// Picks an item of an inspector picker the way a click does: the item is selected and its signal emitted. The item is found by
+        /// its text, or by its metadata (the scenario path) when <paramref name="meta"/> is given.
+        /// </summary>
+        private void PickItem(OptionButton picker, string text, string meta)
+        {
+            for (var i = 0; i < picker.ItemCount; i++)
+            {
+                var match = meta == null ? picker.GetItemText(i) == text : picker.GetItemMetadata(i).AsString() == meta;
+                if (!match)
+                    continue;
+                picker.Select(i);
+                picker.EmitSignal(OptionButton.SignalName.ItemSelected, (long)i);
+                return;
+            }
+            Fail($"the picker offers {meta ?? text}");
+        }
+
+        /// <summary>True when a label of the window shows this text (the inspector's hints are labels).</summary>
+        private bool HasLabel(string text)
+            => window.FindChildren("*", "Label", true, false).OfType<Label>().Any(l => l.Text == text);
+
         /// <summary>The map's cleanup and the byte comparison of the mod's files.</summary>
         private void Cleanup()
         {
             if (window != null)
                 window.QueueFree();
-            foreach (var path in new[] { NewMapPath, NewScenePath, NewPlacementPath, JoinPath })
+            foreach (var path in new[] { NewMapPath, NewScenePath, NewPlacementPath, JoinPath, DialogPath })
                 GameLogger.Log("TEST", $"cleanup {path}: deleted={ModFileService.DeleteFile(Mod, path)}");
             // The actor entry is part of the mod's own characters file: it goes back to what the file held before the test.
             if (before.TryGetValue(ActorsFile, out var original) && original != null)
@@ -277,7 +340,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
             var added = ModFileService.ListFiles(Mod, string.Empty, ".json").Concat(ModFileService.ListFiles(Mod, string.Empty, ".scenario"))
                 .Where(p => !before.ContainsKey(p)).ToList();
             Check(changed.Count == 0 && added.Count == 0,
-                "every file of the mod is as it was (the new map, the join scenario and the actor entry are gone)"
+                "every file of the mod is as it was (the new map, the join scenario, the dialog and the actor entry are gone)"
                 + (changed.Count + added.Count == 0 ? string.Empty : $": changed [{string.Join(", ", changed)}], added [{string.Join(", ", added)}]"));
         }
 

@@ -1,0 +1,48 @@
+{
+  "Kind": "rpg_map",
+  "Items": [
+    {
+      "Id": "rpg_editor_areas",
+      "Width": 10,
+      "Height": 8,
+      "Legend": {
+        "g": "village_pack/ground/grass",
+        "f": "village_pack/structure/fence_wood"
+      },
+      "Ground": [
+        "gggggggggg",
+        "gggggggggg",
+        "gggggggggg",
+        "gggggggggg",
+        "gggggggggg",
+        "gggggggggg",
+        "gggggggggg",
+        "gggggggggg"
+      ],
+      "Structure": [
+        "..........",
+        "..........",
+        "..f.......",
+        "..........",
+        "..........",
+        "..........",
+        "..........",
+        ".........."
+      ],
+      "Collision": [
+        "..........",
+        "..........",
+        "..........",
+        "...#......",
+        "..........",
+        "..........",
+        "..........",
+        ".........."
+      ],
+      "Spawn": {
+        "X": 1,
+        "Y": 1
+      }
+    }
+  ]
+}

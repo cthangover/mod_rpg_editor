@@ -139,9 +139,55 @@ namespace Cthangover.Tools.RpgEditor
         }
 
         /// <summary>
+        /// The locale key of the note an inspector shows on a joining character's placement (<see cref="WithJoin"/>): every kind
+        /// keeps the join after its part, except a teleport, which the game runs alone, so the note is a warning there.
+        /// </summary>
+        public static string JoinNoticeKey(RpgInteractKind kind)
+            => kind == RpgInteractKind.Map ? "tools/rpg_editor/interact_join_lost" : "tools/rpg_editor/interact_join_hint";
+
+        /// <summary>
+        /// The interaction a placement of a joining character actor gets (plan 14.G16): the chosen one with the join lines after it,
+        /// so the dialog plays first and then the character joins. <paramref name="wanted"/> null is "nothing": only the join
+        /// remains, on the trigger of the placement. A teleport is not joined: the game runs a teleport alone
+        /// (<c>RpgInteraction.Run</c>), so the lines would never play.
+        /// </summary>
+        public static RpgInteract WithJoin(RpgInteract wanted, IReadOnlyList<string> joinLines)
+        {
+            if (wanted?.Teleport != null)
+                return wanted;
+            var commands = new List<string>(wanted?.Commands ?? new List<string>());
+            commands.AddRange(joinLines);
+            return new RpgInteract
+            {
+                Trigger = wanted?.Trigger ?? RpgInteractTrigger.Use,
+                Scenario = wanted?.Scenario,
+                Commands = commands,
+            };
+        }
+
+        /// <summary>
+        /// The interaction without the join of a character actor (<see cref="RpgCharacterActors.TryJoinOf"/>): its join scenario and
+        /// join lines are taken out, so the pickers read the author's own part (the kind, its item, its scenario). Null stays null.
+        /// </summary>
+        public static RpgInteract WithoutJoin(RpgInteract interact, string joinScenario, IReadOnlyList<string> joinLines)
+        {
+            if (interact == null || joinLines == null)
+                return interact;
+            var commands = (interact.Commands ?? new List<string>()).Where(line => !joinLines.Contains(line)).ToList();
+            return new RpgInteract
+            {
+                Trigger = interact.Trigger,
+                Scenario = interact.Scenario == joinScenario ? null : interact.Scenario,
+                Commands = commands.Count > 0 ? commands : null,
+                Teleport = interact.Teleport,
+            };
+        }
+
+        /// <summary>
         /// Writes <paramref name="wanted"/> as the interaction of placement <paramref name="placementId"/> of the open document.
         /// <paramref name="objects"/> resolves an object id (null for an unknown one). Returns false when nothing changes or the
-        /// placement is not in the document; then no undo step is made.
+        /// placement is not in the document; then no undo step is made. On a character actor that joins the party the join lines are
+        /// added after the chosen interaction (<see cref="WithJoin"/>), so a dialog plays before the join.
         /// </summary>
         public static bool Apply(RpgMapDocument document, string placementId, RpgInteract wanted, Func<string, RpgObject> objects)
         {
@@ -151,7 +197,10 @@ namespace Cthangover.Tools.RpgEditor
                 GameLogger.Log(Category, $"interaction of '{placementId}' not written: no such placement in this map", LogLevel.Warning);
                 return false;
             }
-            var objectInteract = objects?.Invoke(record.Data[ObjectKey]?.ToString())?.Interact;
+            var objectId = record.Data[ObjectKey]?.ToString();
+            var objectInteract = objects?.Invoke(objectId)?.Interact;
+            if (RpgCharacterActors.TryJoinOf(objectId, objectInteract, out _, out var joinLines))
+                wanted = WithJoin(wanted, joinLines);
             if (wanted == null && objectInteract == null && !record.Data.ContainsKey(InteractKey))
                 return false;
             var written = OverrideOf(wanted, objectInteract);

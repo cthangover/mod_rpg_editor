@@ -1,19 +1,42 @@
 namespace Cthangover.Tools.RpgEditor
 {
     using Cthangover.Core.Characters;
+    using Cthangover.Core.Events;
     using Cthangover.Core.Mods.Resolvers;
     using Cthangover.Mods.Interface.Tool;
     using Cthangover.Mods.Rpg;
     using Cthangover.Mods.Rpg.Model;
     using Cthangover.Tools.Common;
+    using Cthangover.Tools.EntityEditor;
 
     /// <summary>
     /// The characters tab of the palette (plan 14.G7): a chosen character is placed as its actor object, which is written
     /// into the map's mod first (<see cref="RpgCharacterActors"/>). The placement then works like any actor's: a join
     /// scenario of the character is already in that object, so the placed character joins when talked to.
+    /// <para>
+    /// The tab follows the characters editor live (plan 14.G17): a character saved there while this window is open is
+    /// listed at once, so the window is never reopened for it. The window subscribes in its constructor and drops the
+    /// subscription in <c>Cleanup</c>.
+    /// </para>
     /// </summary>
     public partial class RpgEditorWindow
     {
+        /// <summary>The entity kind the characters editor saves (<see cref="EntitiesSavedEvent.Kind"/>).</summary>
+        private const string CharacterKind = "character";
+
+        /// <summary>A data editor saved entities: a saved character reaches the characters tab at once.</summary>
+        private void OnEntitiesSaved(EntitiesSavedEvent evt)
+        {
+            if (evt.Kind == CharacterKind)
+                palette?.RebuildCharacters(textures.Image, textures.Charset);
+            if (evt.Kind == "rpg_object")
+            {
+                objectTable = Entities.Collect<RpgObject>();
+                palette?.Rebuild(objectTable, textures.Image, textures.Charset);
+                RebuildScene();
+            }
+        }
+
         private void OnCharacterChosen(string characterId)
         {
             if (document == null)

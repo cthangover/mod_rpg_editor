@@ -1,0 +1,23 @@
+{
+  "Kind": "rpg_object",
+  "Items": [
+    {
+      "Id": "rpg_editor__areas/event",
+      "Form": "sprite",
+      "Parts": [],
+      "Solid": false,
+      "Footprint": {
+        "Size": [
+          2,
+          2
+        ]
+      },
+      "Interact": {
+        "Trigger": "step",
+        "Commands": [
+          "flag area_test 1"
+        ]
+      }
+    }
+  ]
+}

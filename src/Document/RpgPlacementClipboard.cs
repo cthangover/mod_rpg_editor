@@ -24,6 +24,9 @@ namespace Cthangover.Tools.RpgEditor
 
         /// <summary>The other fields of the placement (a copy; no id, object or cell, no <c>$</c> markers).</summary>
         public JsonObject Fields { get; init; }
+
+        /// <summary>For a map-owned event, its compact data instead of object overrides; paste creates another event.</summary>
+        public JsonObject EventData { get; init; }
     }
 
     /// <summary>

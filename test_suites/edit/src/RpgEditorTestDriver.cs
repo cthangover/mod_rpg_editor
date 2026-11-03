@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,6 +11,7 @@ using Cthangover.Core.Settings;
 using Cthangover.Core.Utils;
 using Cthangover.Mods.Effects.Atmosphere;
 using Cthangover.Mods.Interface.Tool;
+using Cthangover.Mods.Interface.View;
 using Cthangover.Mods.Rpg;
 using Cthangover.Mods.Rpg.Model;
 using Cthangover.Mods.TileRender;
@@ -41,6 +43,12 @@ namespace Cthangover.Tools.RpgEditor.Tests
         private const string NewMapPath = "maps/zz_editor_test_map.json";
         private const string NewScenePath = "scenes/zz_editor_test_map.json";
         private const string NewPlacementPath = "placements/zz_editor_test_map/zz_editor_test_map.json";
+        private const string SuiteMod = "rpg_editor__edit";
+        private const string ManifestFile = "manifest.json";
+        private const string DepMap = "zz_dependency_map";
+        private const string DepMapPath = "maps/zz_dependency_map.json";
+        private const string DepScenePath = "scenes/zz_dependency_map.json";
+        private const string DepPlacementPath = "placements/zz_dependency_map/zz_dependency_map.json";
         private const string Grass = "village_pack/ground/grass";
         private const string Water = "village_pack/ground/water";
         private const string Fence = "village_pack/structure/fence_wood";
@@ -65,6 +73,10 @@ namespace Cthangover.Tools.RpgEditor.Tests
         private static readonly Vector2I StandBeforeDoor = new(7, 1);
         private static readonly Vector2I PlayCell = new(1, 1);
         private static readonly Vector2I[] MaskCells = { new(12, 8), new(13, 8), new(12, 9), new(13, 9) };
+        private static readonly Vector2I TargetCell = new(12, 4);
+        private static readonly Vector2I HeadMove = new(12, 6);
+        private static readonly Vector2I BlockedCell = new(10, 6);
+        private static readonly Vector2I DoorStep = new(9, 1);
 
         private const int KindNone = 0;
         private const int KindItem = 1;
@@ -91,10 +103,15 @@ namespace Cthangover.Tools.RpgEditor.Tests
         private string maskProfile;
         private int demoSpawnX;
         private int demoSpawnY;
+        private string suiteManifest;
+        private readonly string shotsDir;
+        private string pendingShot;
+        private string triggerId;
 
-        /// <summary>Creates the driver; <paramref name="shotsDir"/> is unused (no screenshots).</summary>
+        /// <summary>Creates the driver; <paramref name="shotsDir"/> (may be null) receives the pictures of the drags in progress (plan 14.G18).</summary>
         public RpgEditorTestDriver(string shotsDir)
         {
+            this.shotsDir = shotsDir;
             Name = "RpgEditorTestDriver";
             var timer = new Timer { WaitTime = TickSeconds, Autostart = true };
             AddChild(timer);
@@ -105,10 +122,17 @@ namespace Cthangover.Tools.RpgEditor.Tests
         {
             if (step < 0)
                 return;
+            // A picture asked for by the last step is taken now: the frame of that step is on the screen.
+            if (pendingShot != null)
+            {
+                SaveShot(pendingShot);
+                pendingShot = null;
+            }
             elapsed += TickSeconds;
             if (elapsed > TimeoutSeconds)
             {
                 Fail($"timeout at step {step}");
+                RestoreAfterFailure();
                 Finish();
                 return;
             }
@@ -119,6 +143,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
             catch (System.Exception ex)
             {
                 Fail($"step {step}: {ex.GetType().Name}: {ex.Message}");
+                RestoreAfterFailure();
                 Finish();
             }
         }
@@ -436,6 +461,158 @@ namespace Cthangover.Tools.RpgEditor.Tests
                         return;
                     Check(RpgWorldHost.Current.View.Player.Cell == new Vector2I(demoSpawnX, demoSpawnY),
                         $"in the game, the door takes the player to the cell picked on {DemoMap}");
+                    step = 60;
+                    return;
+                case 60:
+                    // Plan 14.G18: the editor opens again on the new map (the play left its window); the handles are dragged with the mouse.
+                    window = ToolWindow.Open<RpgEditorWindow>();
+                    step++;
+                    return;
+                case 61:
+                    if (window.Document == null)
+                        return;
+                    window.OpenMapFile(Mod, NewMapPath);
+                    Check(window.Document != null && window.Document.MapId == NewMap, "G18: the new map opens again for the handles");
+                    // A trigger on the chest's cell: the marker is picked first; the press near a corner avoids the arrow of the marker.
+                    window.ChooseObject(Trigger, RpgObjectForm.Sprite);
+                    Click(ChestCell);
+                    triggerId = window.SelectedId;
+                    window.SelectTool(RpgEditorTool.Select);
+                    Check(triggerId != null && triggerId != chestId, "G18: a trigger placed on the chest's cell is a placement of its own");
+                    ClickAt(CellCorner(ChestCell));
+                    Check(window.SelectedId == triggerId, "G18: a press on a cell with a marker and a chest picks the marker first");
+                    ClickAt(CellCorner(ChestCell));
+                    Check(window.SelectedId == chestId, "G18: a repeat press on that cell picks the chest under the marker");
+                    ClickAt(CellCorner(ChestCell));
+                    Check(window.SelectedId == triggerId && window.Canvas.Marks.Any(m => m.Fill && m.X == ChestCell.X && m.Y == ChestCell.Y),
+                        "G18: the next repeat press picks the marker again, and the marker is a filled cell");
+                    step++;
+                    return;
+                case 62:
+                    // The trigger leads to a cell of this map: an arrow inside the map.
+                    Choose(PickerNamed("InteractKind"), KindMap);
+                    step++;
+                    return;
+                case 63:
+                    var sameMap = PickerNamed("InteractMap");
+                    sameMap.Select(IndexOfValue(sameMap, NewMap));
+                    NamedAs<Button>("InteractPick").EmitSignal(BaseButton.SignalName.Pressed);
+                    step++;
+                    return;
+                case 64:
+                    Click(TargetCell);
+                    Check(TeleportCell(triggerId) == TargetCell, "G18: a target picked on this map is the teleport's cell");
+                    Check(window.Canvas.Arrows.Any(a => a.Local && a.Placement == triggerId), "G18: the teleport is an arrow inside the map");
+                    step++;
+                    return;
+                case 65:
+                    // The arrowhead is dragged: the target stays until the release, and a ghost cell shows where it would land.
+                    var head = ArrowOf(a => a.Local && a.Placement == triggerId);
+                    Press(window.Canvas.CanvasPointAt(head.To));
+                    MoveHeld(window.Canvas.CanvasPointOf(HeadMove));
+                    Check(window.SelectedId == triggerId && TeleportCell(triggerId) == TargetCell, "G18: a press on the head selects the placement and the target has not moved yet");
+                    Check(FillAt(HeadMove), "G18: the ghost cell of the target is drawn before the release");
+                    Shot("target_ghost");
+                    step++;
+                    return;
+                case 66:
+                    Release(window.Canvas.CanvasPointOf(HeadMove));
+                    Check(TeleportCell(triggerId) == HeadMove, "G18: the release writes the target at the cell released on");
+                    Check(window.Undo() && TeleportCell(triggerId) == TargetCell, "G18: undo puts the target back");
+                    Check(window.Redo() && TeleportCell(triggerId) == HeadMove, "G18: redo moves it again");
+                    step++;
+                    return;
+                case 67:
+                    // A blocked cell: painted, the drag shows it red and the release writes nothing.
+                    window.SelectTool(RpgEditorTool.Collision);
+                    window.SetCollisionCode('#');
+                    Click(BlockedCell);
+                    window.SelectTool(RpgEditorTool.Select);
+                    Check(window.Document.CodeAt(BlockedCell.X, BlockedCell.Y) == RpgCollision.Block, "G18: the blocked cell is painted for the test");
+                    var blockedHead = ArrowOf(a => a.Local && a.Placement == triggerId);
+                    Press(window.Canvas.CanvasPointAt(blockedHead.To));
+                    MoveHeld(window.Canvas.CanvasPointOf(BlockedCell));
+                    Check(RedFillAt(BlockedCell), "G18: a target on a blocked cell is drawn red while it is dragged");
+                    Shot("target_blocked");
+                    step++;
+                    return;
+                case 68:
+                    Release(window.Canvas.CanvasPointOf(BlockedCell));
+                    Check(TeleportCell(triggerId) == HeadMove, "G18: a blocked cell writes no target");
+                    Check(window.Undo() && window.Document.CodeAt(BlockedCell.X, BlockedCell.Y) != RpgCollision.Block,
+                        "G18: undo takes the blocked cell away again");
+                    step++;
+                    return;
+                case 69:
+                    // A door: a press on its arrow selects the door, and a drag moves the door from the cell the pointer is on.
+                    var doorArrow = ArrowOf(a => !a.Incoming && !a.Local && a.Placement == doorId);
+                    Check(doorArrow != null, "G18: the door's arrow to another map is on the canvas");
+                    Press(window.Canvas.CanvasPointAt((doorArrow.From + doorArrow.To) / 2f));
+                    Check(window.SelectedId == doorId, "G18: a press on the door's arrow selects the door");
+                    MoveHeld(window.Canvas.CanvasPointOf(DoorStep));
+                    Check(window.Document.Placements.Any(r => r.Id == doorId && r.Data["X"].GetValue<int>() == DoorCell.X), "G18: the door is not moved before the release");
+                    Check(FillAt(DoorStep), "G18: the door's ghost is drawn while it is dragged");
+                    step++;
+                    return;
+                case 70:
+                    Release(window.Canvas.CanvasPointOf(DoorStep));
+                    Check(PlacementOf(doorId) != null && CellOfPlacement(doorId) == DoorStep, "G18: the release moves the door to the cell released on");
+                    Check(window.Undo() && CellOfPlacement(doorId) == DoorCell, "G18: undo moves the door back");
+                    step++;
+                    return;
+                case 71:
+                    // An arrival: the incoming arrow of the demo map is dragged; the source placement on the new map changes.
+                    Check(window.Save(), "G18: the save before the arrival test succeeds");
+                    window.OpenMapFile(Mod, "maps/" + DemoMap + ".json");
+                    Check(window.Document != null && window.Document.MapId == DemoMap, "G18: the demo map opens and shows the arrival from the door");
+                    step++;
+                    return;
+                case 72:
+                    var arrival = ArrowOf(a => a.Incoming && a.Placement == doorId);
+                    Check(arrival != null, "G18: the door's arrival is an incoming arrow on the demo map");
+                    var probeAt = window.Canvas.CanvasPointAt(arrival.To);
+                    Press(probeAt);
+                    Check(window.ArrivalId == doorId, "G18: a press on the incoming arrow selects the arrival");
+                    var free = FreeNeighbour(new Vector2I(demoSpawnX, demoSpawnY));
+                    Check(free != null, "G18: a free cell lies next to the demo map's spawn");
+                    MoveHeld(window.Canvas.CanvasPointOf(free.Value));
+                    Check(TeleportCell(doorId) == new Vector2I(demoSpawnX, demoSpawnY), "G18: the arrival moves only at the release");
+                    Check(FillAt(free.Value), "G18: the arrival's ghost cell is drawn while it is dragged");
+                    Shot("arrival_ghost");
+                    step++;
+                    return;
+                case 73:
+                    Release(window.Canvas.CanvasPointOf(FreeNeighbour(new Vector2I(demoSpawnX, demoSpawnY)).Value));
+                    var arrivedAt = TeleportCell(doorId);
+                    Check(arrivedAt != new Vector2I(demoSpawnX, demoSpawnY) && arrivedAt.X >= 0, "G18: the release writes the arrival into the source placement on the new map");
+                    Check(window.Undo() && TeleportCell(doorId) == new Vector2I(demoSpawnX, demoSpawnY), "G18: undo puts the arrival back");
+                    Check(window.Redo() && TeleportCell(doorId) == arrivedAt, "G18: redo writes it again");
+                    step++;
+                    return;
+                case 74:
+                    Check(window.Save(), "G18: the save of the arrival succeeds");
+                    var arrivalText = ModFileService.ReadText(Mod, NewPlacementPath) ?? string.Empty;
+                    var saved = JsonNode.Parse(arrivalText)?["Items"]?.AsArray().FirstOrDefault(i => i?["Id"]?.ToString() == doorId);
+                    var savedTeleport = saved?["Interact"]?["Teleport"];
+                    Check(savedTeleport != null && savedTeleport["X"]?.GetValue<int>() == TeleportCell(doorId).X
+                        && savedTeleport["Y"]?.GetValue<int>() == TeleportCell(doorId).Y,
+                        "G18: the source placement's file holds the arrival");
+                    Check(window.FindChildren("*", "", true, false).OfType<Button>().Any(b => b.Text == string.Format(ToolUi.Tr("tools/rpg_editor/arrival_open"), NewMap)),
+                        "G18: the inspector names the source map and offers to open it");
+                    step = 40;
+                    return;
+                case 40:
+                    DependencyGuard(WriteDependencyMap);
+                    step = 41;
+                    return;
+                case 41:
+                    DependencyGuard(CheckDependencyNotice);
+                    step = 42;
+                    return;
+                case 42:
+                    // The test mod goes back to its own text: the manifest byte for byte, the new map's files gone.
+                    RestoreSuiteMod();
+                    Check(ModFileService.ReadText(SuiteMod, ManifestFile) == suiteManifest, "the test mod's manifest is byte-identical again");
                     step = 26;
                     return;
                 case 26:
@@ -464,13 +641,143 @@ namespace Cthangover.Tools.RpgEditor.Tests
                     }
                     finally
                     {
+                        // The check above reports what changed; the files are put back either way (plan 14.G18).
+                        RestoreAfterFailure();
+                        RestoreSuiteMod();
                         Finish();
                     }
                     return;
             }
         }
 
+        /// <summary>
+        /// Plan 14.G16: the test mod is this suite's own folder. Its manifest is set to depend on rpg only, so a village_pack
+        /// object placed on its map is outside the closure and Save adds village_pack to depends. The map is made in a fresh window.
+        /// </summary>
+        private void WriteDependencyMap()
+        {
+            suiteManifest = ModFileService.ReadText(SuiteMod, ManifestFile);
+            Check(suiteManifest != null && suiteManifest.Contains("\"rpg_plus_game>=1\""), "the suite's manifest is read before the change");
+            var ownManifest = JsonNode.Parse(suiteManifest ?? "{}") as JsonObject ?? new JsonObject();
+            ownManifest["id"] = SuiteMod;
+            ownManifest["depends"] = new JsonArray(JsonValue.Create("rpg>=1"));
+            Check(ModFileService.WriteText(SuiteMod, ManifestFile, ownManifest.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }) + "\n"),
+                "the test mod's manifest depends on rpg only");
+            // The window of the game's "Play from here" is gone (window is null); a fresh one opens the test mod's map.
+            window = ToolWindow.Open<RpgEditorWindow>();
+            window.OpenMapFile(SuiteMod, DepMapPath);
+            Check(window.Document != null && window.Document.MapId == DepMap, "a new map of the test mod opens");
+            window.ChooseObject(Chest, RpgObjectForm.Sprite);
+            Click(ChestCell);
+            Check(window.Document.Placements.Any(r => r.Id == window.SelectedId && !r.IsForeign), "a village_pack chest is placed on the test mod's map");
+        }
+
+        /// <summary>Saves the test mod's map: the status line names the added dependency and the manifest gains it.</summary>
+        private void CheckDependencyNotice()
+        {
+            Check(window.Save(), "the save of the test mod's map succeeds");
+            var notice = string.Format(ToolUi.Tr("tools/common/dependency_added"), "village_pack");
+            Check(window.FindChildren("*", "Label", true, false).OfType<Label>().Any(l => l.Text != null && l.Text.Contains(notice)),
+                "the status line says that village_pack was added to depends");
+            var savedManifest = ModFileService.ReadText(SuiteMod, ManifestFile) ?? string.Empty;
+            Check(savedManifest.Contains("\"village_pack>=1\"") && savedManifest.Contains("\"rpg>=1\""),
+                "the manifest gains village_pack>=1 and keeps rpg>=1");
+        }
+
+        /// <summary>Runs a dependency part; a failure first puts the test mod back, so a red run leaves no change behind.</summary>
+        private void DependencyGuard(Action part)
+        {
+            try
+            {
+                part();
+            }
+            catch
+            {
+                RestoreSuiteMod();
+                throw;
+            }
+        }
+
+        /// <summary>Writes the test mod's manifest back byte for byte and deletes the map the dependency part made there.</summary>
+        private void RestoreSuiteMod()
+        {
+            if (suiteManifest != null && ModFileService.ReadText(SuiteMod, ManifestFile) != suiteManifest)
+                ModFileService.WriteText(SuiteMod, ManifestFile, suiteManifest);
+            foreach (var path in new[] { DepMapPath, DepScenePath, DepPlacementPath })
+            {
+                var full = ModFileService.GetWritablePath(SuiteMod, path);
+                if (full != null && File.Exists(full))
+                    File.Delete(full);
+            }
+            var depFolder = ModFileService.GetWritablePath(SuiteMod, "placements/" + DepMap);
+            if (depFolder != null && Directory.Exists(depFolder) && Directory.GetFileSystemEntries(depFolder).Length == 0)
+                Directory.Delete(depFolder);
+        }
+
         private EntityRecord PlacementOf(string id) => window.Document.Placements.FirstOrDefault(r => r.Id == id);
+
+        /// <summary>The target cell of the teleport a placement holds in the open document, or (-1, -1).</summary>
+        private Vector2I TeleportCell(string id)
+        {
+            var teleport = window.Document.AnyPlacement(id)?.Data?["Interact"]?["Teleport"];
+            return teleport == null ? new Vector2I(-1, -1) : new Vector2I(teleport["X"].GetValue<int>(), teleport["Y"].GetValue<int>());
+        }
+
+        /// <summary>A point near a cell's corner: a press there is not on the arrow that starts at the cell's centre.</summary>
+        private Vector2 CellCorner(Vector2I cell) => window.Canvas.CanvasPointAt(new Vector2(cell.X + 0.05f, cell.Y + 0.05f));
+
+        /// <summary>A left press and release at a point of the canvas (canvas pixels).</summary>
+        private void ClickAt(Vector2 at)
+        {
+            window.Canvas._GuiInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = at });
+            window.Canvas._GuiInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = at });
+        }
+
+        private void Press(Vector2 at)
+            => window.Canvas._GuiInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = at });
+
+        private void MoveHeld(Vector2 at)
+            => window.Canvas._GuiInput(new InputEventMouseMotion { Position = at, ButtonMask = MouseButtonMask.Left });
+
+        private void Release(Vector2 at)
+            => window.Canvas._GuiInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = at });
+
+        /// <summary>The first arrow of the canvas that the test accepts, or null.</summary>
+        private RpgTeleportArrow ArrowOf(Func<RpgTeleportArrow, bool> test) => window.Canvas.Arrows.FirstOrDefault(test);
+
+        /// <summary>True when the canvas draws a filled mark on the cell (a ghost, a marker, a selection).</summary>
+        private bool FillAt(Vector2I cell) => window.Canvas.Marks.Any(m => m.Fill && m.X == cell.X && m.Y == cell.Y);
+
+        /// <summary>True when a filled mark of the red ghost colour is on the cell.</summary>
+        private bool RedFillAt(Vector2I cell)
+            => window.Canvas.Marks.Any(m => m.Fill && m.X == cell.X && m.Y == cell.Y && m.Color.R > 0.9f && m.Color.G < 0.5f);
+
+        /// <summary>A free neighbour of a cell of the open map (not blocked, on the map), or null.</summary>
+        private Vector2I? FreeNeighbour(Vector2I cell)
+        {
+            foreach (var offset in new[] { new Vector2I(1, 0), new Vector2I(-1, 0), new Vector2I(0, 1), new Vector2I(0, -1) })
+            {
+                var next = cell + offset;
+                if (next.X >= 0 && next.Y >= 0 && next.X < window.Document.Width && next.Y < window.Document.Height
+                    && window.Document.CodeAt(next.X, next.Y) != RpgCollision.Block)
+                    return next;
+            }
+            return null;
+        }
+
+        /// <summary>Asks for a picture of the state the next tick shows; nothing without a shots folder or a display.</summary>
+        private void Shot(string name)
+        {
+            if (string.IsNullOrEmpty(shotsDir) || DisplayServer.GetName() == "headless")
+                return;
+            pendingShot = name;
+        }
+
+        private void SaveShot(string name)
+        {
+            DirAccess.MakeDirRecursiveAbsolute(shotsDir);
+            ViewportCapture.SavePng(GetViewport(), shotsDir.TrimEnd('/') + "/rpg_editor_edit_" + name + ".png");
+        }
 
         /// <summary>A left click on a cell of the canvas: press and release through the canvas' own input.</summary>
         private void Click(Vector2I cell, MouseButton button = MouseButton.Left)
@@ -591,6 +898,35 @@ namespace Cthangover.Tools.RpgEditor.Tests
         {
             failures.Add(what);
             GameLogger.Log("TEST", $"[FAIL] {what}", LogLevel.Error);
+        }
+
+        /// <summary>
+        /// A red run puts the mod back as it was before the test (plan 14.G18): every file that differs from its text at the start is
+        /// written back, and the new map's files are deleted. A leftover map from a failed run would fail the next run.
+        /// </summary>
+        private void RestoreAfterFailure()
+        {
+            try
+            {
+                foreach (var (path, text) in before)
+                {
+                    if (text != null && ModFileService.ReadText(Mod, path) != text)
+                        ModFileService.WriteText(Mod, path, text);
+                }
+                foreach (var path in new[] { NewMapPath, NewScenePath, NewPlacementPath })
+                {
+                    var full = ModFileService.GetWritablePath(Mod, path);
+                    if (full != null && File.Exists(full))
+                        File.Delete(full);
+                }
+                var newFolder = ModFileService.GetWritablePath(Mod, "placements/" + NewMap);
+                if (newFolder != null && Directory.Exists(newFolder) && Directory.GetFileSystemEntries(newFolder).Length == 0)
+                    Directory.Delete(newFolder);
+            }
+            catch (System.Exception ex)
+            {
+                GameLogger.Log("TEST", $"restore after a failure: {ex.Message}", LogLevel.Error);
+            }
         }
 
         private void Finish()

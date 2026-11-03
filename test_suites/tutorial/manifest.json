@@ -1,0 +1,10 @@
+{
+  "name": "Tutorial First Game Test",
+  "description": "Step 1 of the tutorial \"Your first game in 10 minutes\" (rpg_editor docs, plan 14.G15), clicked: in the Mods & Collections editor of the game RPG Plus, the New mod wizard makes the mod tutorial_first_game with rpg_plus_game as its base and adds it to the game (the wizard's id follows the title). The mod folder and the user copy of the game's collection stay for the next suite, tutorial_first_game_play, which plays steps 2 to 10; a marker in the mod folder keeps the collection files as they were before this test, so the next suite can restore them byte for byte. Activated by --itest=tutorial_first_game with --frontend (--shots=<dir> saves the wizard and the result).",
+  "sources": [
+    "src/*.cs"
+  ],
+  "depends": [
+    "mod_manager>=1"
+  ]
+}

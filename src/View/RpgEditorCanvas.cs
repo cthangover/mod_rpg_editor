@@ -36,6 +36,9 @@ namespace Cthangover.Tools.RpgEditor
         private bool fitPending;
         private bool panning;
         private bool pressing;
+        private bool resizing;
+        private Vector2 resizeStart;
+        private bool resizeMoved;
         private MouseButton pressButton;
         private Vector2I? hover;
         private Vector2I? lastDrag;
@@ -51,6 +54,53 @@ namespace Cthangover.Tools.RpgEditor
 
         /// <summary>The cell under the pointer changed (null when the pointer left the map).</summary>
         public event Action<Vector2I?> Hovered;
+
+        /// <summary>
+        /// A left or right press on a teleport arrow (plan 14.G18): its index in <see cref="Arrows"/>, the part hit, and the cell
+        /// pressed ((-1, -1) when the press is off the map). The press is not a cell press; its drag still reports cells.
+        /// </summary>
+        public event Action<int, RpgArrowHandle, Vector2I, MouseButton> ArrowPressed;
+
+        /// <summary>Selected event bounds; four handles use screen pixels so they remain usable at every zoom.</summary>
+        public Rect2I? ResizeArea { get; set; }
+        public event Action<int, Vector2> ResizePressed;
+        public event Action<Vector2> ResizeDragged;
+        public event Action<Vector2> ResizeReleased;
+
+        /// <summary>Inverse of the two affine editor projections, including points outside the map for boundary handles.</summary>
+        public Vector2 CellSpaceAt(Vector2 point)
+        {
+            var origin = CanvasPointAt(Vector2.Zero);
+            var x = CanvasPointAt(Vector2.Right) - origin;
+            var y = CanvasPointAt(Vector2.Down) - origin;
+            var determinant = x.X * y.Y - x.Y * y.X;
+            if (Mathf.IsZeroApprox(determinant)) return Vector2.Zero;
+            var delta = point - origin;
+            return new Vector2((delta.X * y.Y - delta.Y * y.X) / determinant,
+                (x.X * delta.Y - x.Y * delta.X) / determinant);
+        }
+
+        private static Vector2 Corner(Rect2I area, int index) => index switch
+        {
+            0 => area.Position,
+            1 => new Vector2(area.End.X, area.Position.Y),
+            2 => area.End,
+            _ => new Vector2(area.Position.X, area.End.Y),
+        };
+
+        /// <summary>The visible event corner under the pointer, or -1; handles take precedence over teleport arrows.</summary>
+        public int ResizeHandleAt(Vector2 point)
+        {
+            if (view == null || ResizeArea is not { } area) return -1;
+            var picked = -1;
+            var distance = 100f;
+            for (var i = 0; i < 4; i++)
+            {
+                var candidate = CanvasPointAt(Corner(area, i)).DistanceSquaredTo(point);
+                if (candidate <= distance) { distance = candidate; picked = i; }
+            }
+            return picked;
+        }
 
         /// <summary>Rectangles of cells drawn over the map, in order (footprints, selection, paint preview).</summary>
         public List<CanvasRect> Marks { get; } = new();
@@ -69,6 +119,9 @@ namespace Cthangover.Tools.RpgEditor
 
         /// <summary>Teleport arrows drawn over the marks (plan 14.G3); the window fills them from the map's links.</summary>
         public List<RpgTeleportArrow> Arrows { get; } = new();
+
+        /// <summary>Only selection tools intercept clicks on links; paint tools always receive the cell.</summary>
+        public bool ArrowsInteractive { get; set; } = true;
 
         /// <summary>Renderer id in use (<see cref="TopDown"/> or <see cref="Isometric"/>).</summary>
         public string Projection => projection;
@@ -173,6 +226,24 @@ namespace Cthangover.Tools.RpgEditor
             return world.Position + world.Scale.X * view.ProjectToView(new Vector3(cell.X + 0.5f, cell.Y + 0.5f, 0));
         }
 
+        /// <summary>The canvas position of a point of cell space (a cell centre is at x + 0.5), so arrows can be hit in pixels.</summary>
+        public Vector2 CanvasPointAt(Vector2 cellSpace)
+        {
+            if (view == null)
+                return Vector2.Zero;
+            return world.Position + world.Scale.X * view.ProjectToView(new Vector3(cellSpace.X, cellSpace.Y, 0));
+        }
+
+        /// <summary>The teleport arrow under a canvas point (plan 14.G18): its index in <see cref="Arrows"/> (-1 for none) and the part hit.</summary>
+        public int ArrowAt(Vector2 canvasPoint, out RpgArrowHandle handle)
+        {
+            handle = RpgArrowHandle.None;
+            if (view == null || Arrows.Count == 0)
+                return -1;
+            var segments = Arrows.Select(a => (From: CanvasPointAt(a.From), To: CanvasPointAt(a.To))).ToList();
+            return RpgArrowHit.Pick(segments, canvasPoint, out handle);
+        }
+
         /// <summary>Runs the renderer's presentation teardown; the canvas is then empty.</summary>
         public void Clear()
         {
@@ -183,6 +254,8 @@ namespace Cthangover.Tools.RpgEditor
             fitted = false;
             fitPending = false;
             Marks.Clear();
+            ResizeArea = null;
+            resizing = false;
             Arrows.Clear();
             GhostRect = null;
             GhostTexture = null;
@@ -224,9 +297,43 @@ namespace Cthangover.Tools.RpgEditor
             if (button.ButtonIndex is not (MouseButton.Left or MouseButton.Right))
                 return;
             AcceptEvent();
+            if (button.ButtonIndex == MouseButton.Left && resizing && !button.Pressed)
+            {
+                resizing = false;
+                // A click without a drag still cycles stacked placements, including underneath the event.
+                var moved = resizeMoved || button.Position.DistanceSquaredTo(resizeStart) > 9;
+                ResizeReleased?.Invoke(CellSpaceAt(moved ? button.Position : resizeStart));
+                if (!moved && CellAt(resizeStart) is { } clicked)
+                {
+                    CellPressed?.Invoke(clicked, button.ButtonIndex, button.DoubleClick);
+                    CellReleased?.Invoke(clicked, button.ButtonIndex);
+                }
+                return;
+            }
             if (button.Pressed)
             {
+                var corner = button.ButtonIndex == MouseButton.Left ? ResizeHandleAt(button.Position) : -1;
+                if (corner >= 0)
+                {
+                    resizing = true;
+                    resizeStart = button.Position;
+                    resizeMoved = false;
+                    pressing = false;
+                    ResizePressed?.Invoke(corner, CellSpaceAt(button.Position));
+                    return;
+                }
                 var cell = CellAt(button.Position);
+                var handle = RpgArrowHandle.None;
+                var arrow = button.ButtonIndex == MouseButton.Left && ArrowsInteractive ? ArrowAt(button.Position, out handle) : -1;
+                if (arrow >= 0)
+                {
+                    // An arrow is a handle, even where it leaves the map: its drag reports the cells the pointer crosses.
+                    pressing = true;
+                    pressButton = button.ButtonIndex;
+                    lastDrag = cell;
+                    ArrowPressed?.Invoke(arrow, handle, cell ?? new Vector2I(-1, -1), button.ButtonIndex);
+                    return;
+                }
                 if (cell is not { } at)
                     return;
                 pressing = true;
@@ -248,6 +355,13 @@ namespace Cthangover.Tools.RpgEditor
             if (panning)
             {
                 world.Position += motion.Relative;
+                AcceptEvent();
+                return;
+            }
+            if (resizing)
+            {
+                resizeMoved |= motion.Position.DistanceSquaredTo(resizeStart) > 9;
+                if (resizeMoved) ResizeDragged?.Invoke(CellSpaceAt(motion.Position));
                 AcceptEvent();
                 return;
             }
@@ -320,6 +434,16 @@ namespace Cthangover.Tools.RpgEditor
                     target.DrawColoredPolygon(polygon, mark.Color);
                 else
                     target.DrawPolyline(polygon.Append(polygon[0]).ToArray(), mark.Color, 2f);
+            }
+            if (ResizeArea is { } area)
+            {
+                var side = 9f / world.Scale.X;
+                for (var i = 0; i < 4; i++)
+                {
+                    var corner = Corner(area, i);
+                    var point = view.ProjectToView(new Vector3(corner.X, corner.Y, 0));
+                    target.DrawRect(new Rect2(point - Vector2.One * side / 2, Vector2.One * side), Colors.White);
+                }
             }
             foreach (var arrow in Arrows)
                 arrow.Draw(target, cell => view.ProjectToView(new Vector3(cell.X, cell.Y, 0)));
