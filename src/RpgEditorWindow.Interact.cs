@@ -32,6 +32,11 @@ namespace Cthangover.Tools.RpgEditor
             canvas.ArrowPressed += OnArrowPressed;
         }
 
+        private void OnRouteChanged(string id, System.Text.Json.Nodes.JsonNode route)
+        {
+            if (document != null && document.SetPlacementField(id, "Route", route)) AfterChange();
+        }
+
         private void OnInteractChanged(string placementId, RpgInteract wanted)
         {
             if (document != null && RpgInteractEdit.Apply(document, placementId, wanted, ObjectOf))

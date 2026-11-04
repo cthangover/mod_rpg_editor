@@ -428,6 +428,7 @@ namespace Cthangover.Tools.RpgEditor
             var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
             inspector = new RpgEditorInspector { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
             inspector.PlacementMoved += OnPlacementMoved;
+            inspector.RouteChanged += OnRouteChanged;
             inspector.PlacementDeleted += id => DeletePlacement(id);
             inspector.PlacementReset += OnPlacementReset;
             inspector.PropertyChanged += OnPropertyChanged;
@@ -1109,7 +1110,7 @@ namespace Cthangover.Tools.RpgEditor
                     Visible = true,
                     Charset = true,
                     Facing = 1,
-                    Column = TileWalkSheet.IdleColumn,
+                    Column = TileWalkSheet.Animation(look.Texture).IdleColumn,
                     Position = new Vector2(actor.X, actor.Y),
                     Look = look,
                     Tint = Colors.White,
@@ -1234,6 +1235,8 @@ namespace Cthangover.Tools.RpgEditor
                 Placement = selectedId,
                 Arrival = incoming.FirstOrDefault(l => l.Placement == arrivalId),
                 ObjectId = selectedObject,
+                Route = selectedId == null ? null : scene.ObjectOf(selectedId)?.Route,
+                IsActor = selectedId != null && scene.ObjectOf(selectedId)?.Form == RpgObjectForm.Actor,
                 Outgoing = outgoing,
                 Incoming = incoming,
                 MapSize = new Vector2I(scene.Map.Width, scene.Map.Height),

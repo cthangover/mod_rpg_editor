@@ -122,6 +122,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.Events
                     window.ChooseObject(objectId, RpgObjectForm.Sprite);
                     Click(Cell(6, 5));
                     Check(window.Document.Placements.Any(p => p.Data["Object"]?.ToString() == objectId), "new object can be placed immediately");
+                    CheckActorRoute();
                     window.QueueFree();
                     window = null;
                     RpgWorldHost.Teleport(new RpgTeleport { Map = Map, X = 1, Y = 2, Dir = RpgDirection.Right });
@@ -141,6 +142,37 @@ namespace Cthangover.Tools.RpgEditor.Tests.Events
                     return;
             }
             step++;
+        }
+
+        private void CheckActorRoute()
+        {
+            window.ChooseObject("village_pack/npc/villager", RpgObjectForm.Actor);
+            Click(Cell(8, 6));
+            var actorId = window.SelectedId;
+            var editor = window.Inspector.FindChild("ActorRoute", true, false) as RpgRouteEditor;
+            Check(editor != null, "selecting an actor exposes its route editor");
+            if (editor == null) throw new InvalidOperationException("Actor route editor is missing");
+            editor.GetChildren().OfType<TextEdit>().Single().Text = "left\nwait:2\nright";
+            PressText(editor, TranslationServer.Translate("tools/rpg_editor/route_apply"));
+            var route = window.Scene.ObjectOf(actorId)?.Route;
+            Check(route?.Steps.SequenceEqual(new[] { "left", "wait:2", "right" }) == true,
+                "route changes travel through the inspector into the actor placement");
+            Check(window.Undo() && window.Scene.ObjectOf(actorId)?.Route == null, "one undo removes the route override");
+            Check(window.Redo() && window.Scene.ObjectOf(actorId)?.Route?.Steps.Count == 3, "redo restores the route");
+            Check(window.Save(), "actor route saves through the map editor");
+            window.OpenMapFile(Mod, "maps/" + Map + ".json");
+            route = window.Scene.ObjectOf(actorId)?.Route;
+            Check(route?.Steps.SequenceEqual(new[] { "left", "wait:2", "right" }) == true, "route instructions survive save and reload");
+            Check(route != null && Math.Abs(route.Speed - 1.3) < 0.00001 && Math.Abs(route.Every - 1.2) < 0.00001
+                && route.Repeat && route.RetryBlocked, "route speed, interval and flags survive save and reload");
+            window.SelectTool(RpgEditorTool.Select);
+            Click(Cell(8, 6));
+            editor = window.Inspector.FindChild("ActorRoute", true, false) as RpgRouteEditor;
+            Check(editor?.GetChildren().OfType<TextEdit>().Single().Text == "left\nwait:2\nright", "reselecting the actor restores the route form");
+            Click(Cell(6, 5));
+            Check(window.Inspector.FindChild("ActorRoute", true, false) == null, "sprite selection has no actor route controls");
+            Click(Cell(2, 2));
+            Check(window.Inspector.FindChild("ActorRoute", true, false) == null, "map event selection has no actor route controls");
         }
 
         private Vector2 Cell(int x, int y) => window.Canvas.CanvasPointOf(new Vector2I(x, y));

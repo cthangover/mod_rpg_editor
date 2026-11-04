@@ -130,7 +130,7 @@ namespace Cthangover.Tools.RpgEditor
                 var sheet = charset?.Invoke(obj.Charset ?? string.Empty);
                 if (sheet == null)
                     return null;
-                var frame = TileWalkSheet.Frame(sheet.GetSize(), TileWalkSheet.IdleColumn, 0);
+                var frame = TileWalkSheet.Frame(sheet, TileWalkSheet.Animation(sheet).IdleColumn, 0);
                 return new AtlasTexture { Atlas = sheet, Region = frame };
             }
             var path = obj.Form switch

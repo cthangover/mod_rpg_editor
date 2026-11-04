@@ -78,6 +78,10 @@ namespace Cthangover.Tools.RpgEditor
 
             /// <summary>The object's own interaction, without any placement's override (it tells a character actor that joins), or null.</summary>
             public RpgInteract ObjectInteract { get; init; }
+            /// <summary>Effective route of the selected actor.</summary>
+            public RpgMoveRoute Route { get; init; }
+            /// <summary>Whether the selection uses an actor charset.</summary>
+            public bool IsActor { get; init; }
 
             /// <summary>Teleports that leave this map.</summary>
             public IReadOnlyList<RpgTeleportLink> Outgoing { get; init; } = Array.Empty<RpgTeleportLink>();
@@ -121,6 +125,8 @@ namespace Cthangover.Tools.RpgEditor
 
         /// <summary>The interaction of a placement changed: the placement id and the wanted interaction (null for none).</summary>
         public event Action<string, RpgInteract> InteractChanged;
+        /// <summary>The selected actor route changed.</summary>
+        public event Action<string, JsonNode> RouteChanged;
 
         /// <summary>One explicit Apply of the independent event form, preserving its stable id.</summary>
         public event Action<string, JsonObject> EventChanged;
@@ -199,6 +205,12 @@ namespace Cthangover.Tools.RpgEditor
 
             if (!deleted)
                 AddInteract(box, state);
+            if (!deleted && state.IsActor)
+            {
+                var editor = new RpgRouteEditor(state.Placement, state.Route);
+                editor.RouteChanged += ForwardRoute;
+                box.AddChild(editor);
+            }
             // Extension point of the state preview (plan 14.G11, file View/RpgStatePreview.cs): self. flags, not saved.
             if (!deleted && state.ObjectId != null)
                 box.AddChild(new RpgStatePreview(doc, id, state.ObjectId));
@@ -210,6 +222,8 @@ namespace Cthangover.Tools.RpgEditor
         /// The interaction section of the selected placement: what it does (a picker of kinds), its trigger, and the pickers of
         /// the kind. Only the rows of the current kind are built; a change is written at once through <see cref="InteractChanged"/>.
         /// </summary>
+        private void ForwardRoute(string id, JsonNode route) => RouteChanged?.Invoke(id, route);
+
         private void AddInteract(VBoxContainer box, State state)
         {
             var id = state.Placement;
