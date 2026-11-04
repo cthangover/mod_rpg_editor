@@ -18,8 +18,8 @@ Pulsa **Nuevo objeto…** bajo la paleta para abrir su formulario en el mod del 
 
 ![El Editor de mapas RPG sobre la casa del anciano de RPG Plus: la barra con el selector de mapa, Save, Undo, Redo y las herramientas; la paleta de objetos a la izquierda con la pestaña Surfaces; el mapa en el centro; el inspector a la derecha con el tamaño, el punto de aparición, los enlaces de teletransporte y los encuentros.](assets/rpg-editor-open.jpg)
 
-- **Barra de herramientas** — el mod y el archivo del mapa (**+** crea un mapa nuevo), **Save**, **Undo**, **Redo**, las cinco herramientas, el selector de código de colisión, el selector de proyección (**Top-down** o **Isometric**) y **Fit**, que muestra el mapa entero.
-- **Paleta** (izquierda) — los objetos RPG del mod, en cuatro pestañas según su forma: **Surfaces** (suelo), **Segments** (una casilla de muro o de valla), **Sprites** (objetos en la cuadrícula) y **Actors** (personajes en una casilla). Cada pestaña tiene búsqueda por nombre o id y una miniatura por fila.
+- **Barra de herramientas** — el mod y el archivo del mapa (**+** crea un mapa nuevo), **Save**, **Undo**, **Redo**, las siete herramientas, el selector de código de colisión, el selector de proyección (**Top-down** o **Isometric**) y **Fit**, que muestra el mapa entero.
+- **Paleta** (izquierda) — cuatro pestañas por forma: **Surfaces**, **Segments**, **Sprites**, **Actors**, y **Characters** para personajes con `Charset`. Cada una tiene búsqueda y miniaturas.
 - **Mapa** (centro) — el mapa dibujado por el propio renderizador del juego. Los marcos finos muestran las casillas que ocupa cada colocación; la colocación seleccionada aparece rellena.
 - **Inspector** (derecha) — la colocación seleccionada, las propiedades del mapa, sus enlaces de teletransporte y los encuentros.
 
@@ -66,14 +66,7 @@ Para colocar un sprite, elíjalo en la pestaña **Sprites**, active **Place** y 
 
 ## Pendiente
 
-Esto no está en la versión actual; no lo busque:
-
-- renombrar el id de una colocación o de un mapa actualizando las referencias;
-- selección por rectángulo, copiar y pegar colocaciones;
-- abrir un objeto colocado en el Editor de objetos RPG desde el mapa;
-- estados y variantes de la colocación: la vista previa lee los estados propios del objeto; los cambios de estado por colocación y las variantes no se editan aquí;
-- pintar las máscaras de efectos de la atmósfera sobre el mapa — aquí no se editan; para el aspecto use el Effects Editor;
-- **Interacción**, objeto recogible: **Colocar en el mapa** del editor de objetos pone el objeto recogible en el mapa; el objeto entrega su ítem cuando la colocación tiene la interacción **Entrega un objeto** (se elige en el inspector).
+Quedan pendientes renombrar mapas/colocaciones actualizando referencias, abrir el objeto colocado seleccionado en su editor y formularios de estados/variantes de una colocación. La selección por rectángulo, copiar/pegar, máscaras de efectos y selectores de interacción ya funcionan.
 
 ## Si algo sale mal
 
@@ -82,3 +75,23 @@ Esto no está en la versión actual; no lo busque:
 3. **El juego no conoce un mapa nuevo.** Guarde primero: el mapa y su escena se escriben solo en el primer guardado.
 4. **Una colocación se rechaza.** El objeto no es un sprite ni un actor, la casilla está fuera del mapa o el mapa pertenece a otro mod.
 5. **No hay panel de encuentros.** El juego no tiene combates aleatorios (`rpg__battles`).
+
+## Eventos del mapa y combates opcionales
+
+Las zonas invisibles se guardan en `Events` del mapa: `Id` local, `X`, `Y`, `Width`, `Height`, `Trigger`, `When`, `Solid` y `Scenario` con `Commands` o un `Teleport` independiente. No necesitan objeto ni colocación. `self.done` pertenece a `<map>/<event>:done`; conserve el ID. En el editor elija Event, dibuje el rectángulo, escriba las órdenes, Apply event y Save.
+
+## Selección, efectos y prueba
+
+En Select, arrastra un rectángulo para seleccionar varias colocaciones; Ctrl+A selecciona todas. Ctrl+C copia y Ctrl+V pega en la casilla bajo el puntero, conservando los desplazamientos. Cada operación se deshace en un paso. Las flechas de teletransporte permiten mover la salida y el destino; una llegada desde otro mapa se guarda en su archivo o en un parche del mod elegido.
+
+En **Effects**, elige un perfil y pinta su máscara con LMB; RMB borra. **Open map editor** de Effects Editor abre esta herramienta con el perfil elegido. Una máscara vacía se elimina.
+
+En **Collision** las casillas bloqueadas se ven rojas en ambas proyecciones. LMB pinta el código elegido; RMB escribe `o` y abre paso incluso a través de objetos. `#` bloquea y `.` vuelve a delegar en `Solid` y `Footprint.Solid`. Un trazo es un paso de Ctrl+Z/Y.
+
+Los eventos sin imagen tienen cuatro tiradores de esquina en Select. Arrastrar cambia `X`, `Y`, `Width`, `Height` como un paso de deshacer; las colocaciones antiguas cambian `Footprint.Size`. El rectángulo no sale del mapa y mide al menos una casilla.
+
+Save añade a `depends` solo las dependencias que faltan para los objetos y recursos usados; los archivos de los propietarios permanecen intactos. **Play from here** guarda y entra en el mapa en la última casilla pulsada (o el punto inicial); necesita una partida RPG en marcha. La pestaña **Characters** se suma a Surfaces, Segments, Sprites y Actors y coloca personajes que tengan `Charset`.
+
+**Gives an item** repite la entrega mientras no se añada un flag y un estado o condición de uso único. El editor de eventos permite escribir las órdenes y terminar con `flag self.done 1`, usando `self.done != 1` como condición.
+
+Para un primer juego: crea un mod desde el esquema de RPG Plus, inicia el juego, crea y guarda un mapa, pinta suelo y coloca un cofre. Configura su interacción en el inspector; añade un evento puerta y un NPC con escenario. Un personaje con `Charset` y **Joins the party when talked to** se coloca desde Characters: su diálogo se reproduce antes de unirse. Usa Play from here y prueba los objetos con E/F.

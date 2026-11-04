@@ -1,0 +1,9 @@
+{
+  "name": "RPG maps in the 2D light editor",
+  "sources": [
+    "src/*.cs"
+  ],
+  "test_sources": [
+    "tests/*.cs"
+  ]
+}

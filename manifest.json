@@ -56,6 +56,26 @@
       "activate": [
         "--itest=rpg_map_events"
       ]
+    },
+    {
+      "id": "lighting",
+      "activate": [
+        "--itest=map_lights"
+      ]
+    },
+    {
+      "id": "darkness",
+      "activate": [
+        "--itest=free_lights"
+      ]
+    }
+  ],
+  "integrations": [
+    {
+      "id": "lights",
+      "with": [
+        "light_editor"
+      ]
     }
   ]
 }

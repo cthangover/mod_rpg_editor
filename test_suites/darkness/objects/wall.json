@@ -1,0 +1,30 @@
+{
+  "Kind": "rpg_object",
+  "Items": [
+    {
+      "Id": "light_probe/wall",
+      "Form": "sprite",
+      "Solid": false,
+      "Footprint": {
+        "Size": [
+          1,
+          1
+        ]
+      },
+      "Parts": [
+        {
+          "Image": "lighting_probe/wall",
+          "At": [
+            -1,
+            -4
+          ],
+          "Size": [
+            3,
+            4
+          ],
+          "Geometry": "upright"
+        }
+      ]
+    }
+  ]
+}

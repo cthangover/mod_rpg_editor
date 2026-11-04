@@ -1,0 +1,11 @@
+{
+  "Kind": "rpg_placement",
+  "Items": [
+    {
+      "Id": "rpg_light_wall/wall",
+      "Object": "light_probe/wall",
+      "X": 5,
+      "Y": 1
+    }
+  ]
+}

@@ -205,6 +205,10 @@ namespace Cthangover.Tools.RpgEditor
             frame.Actors.Clear();
             frame.Actors.AddRange(Actors);
             frame.Focus = scene == null ? Vector2.Zero : new Vector2(scene.Size.X, scene.Size.Y) / 2f;
+            frame.Ambient = PreviewAmbient;
+            frame.TimeWeights = PreviewTimeWeights;
+            frame.Lights.Clear();
+            frame.Lights.AddRange(PreviewLights.OrderBy(light => light.Position.DistanceSquaredTo(frame.Focus)).Take(16));
             view.Present(frame, 0);
             overlay.QueueRedraw();
         }
@@ -427,6 +431,7 @@ namespace Cthangover.Tools.RpgEditor
         {
             if (view == null)
                 return;
+            PaintLightMarkers(target);
             foreach (var mark in Marks)
             {
                 var polygon = Outline(mark);

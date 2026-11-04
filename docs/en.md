@@ -19,7 +19,7 @@ For a visible prop or NPC, press **New object…** below the palette. Its form o
 
 With **Select**, choose a picture-less event (trigger or door). Drag one of the four white corner squares to resize its area on the cell grid while keeping the opposite corner fixed. The handles work in both isometric and top-down views at any zoom. Dragging inside the area still moves the placement; clicking without dragging still cycles stacked placements.
 
-The origin and size commit together on release as one **Ctrl+Z** step. The area stays inside the map and cannot shrink below one cell. This writes the selected placement's `Footprint.Size`, leaving other instances of the same object unchanged. A foreign placement is saved as a patch in your own mod.
+The origin and size commit together on release as one **Ctrl+Z** step. The area stays inside the map and cannot shrink below one cell. A map-owned event writes `X`, `Y`, `Width`, `Height` in the map's `Events`; a legacy picture-less placement writes its own `Footprint.Size`. Foreign data is saved as a patch in your own mod; other instances stay unchanged.
 
 ![Resizing an event area in the isometric editor: four white corner handles and the yellow pending bounds.](assets/event-area-isometric.png)
 
@@ -66,8 +66,8 @@ Notes on this path:
 
 ![The RPG Map Editor on the elder's house of RPG Plus: the toolbar with the map picker, Save, Undo, Redo and the tools; the object palette with the Surfaces tab on the left; the map in the middle; the inspector on the right with the map size, spawn point, teleport links and encounters.](assets/rpg-editor-open.jpg)
 
-- **Toolbar** — the mod and the map file (**+** makes a new map), **Save**, **Undo**, **Redo**, the five tools, the collision code picker, the projection picker (**Top-down** or **Isometric**) and **Fit**, which shows the whole map.
-- **Palette** (left) — the objects of the mod's RPG objects, in four tabs by shape: **Surfaces** (ground), **Segments** (one wall or fence cell), **Sprites** (objects on the grid) and **Actors** (characters on one cell). Each tab has a search by name or id and a thumbnail per row.
+- **Toolbar** — the mod and the map file (**+** makes a new map), **Save**, **Undo**, **Redo**, the seven tools, the collision code picker, the projection picker (**Top-down** or **Isometric**) and **Fit**, which shows the whole map.
+- **Palette** (left) — four object-form tabs: **Surfaces**, **Segments**, **Sprites**, **Actors**, plus **Characters** for character definitions with a `Charset`. Each tab supports search and thumbnails.
 - **Map** (middle) — the map drawn by the game's own renderer. Thin frames show the footprint of each placement; the selected one is filled.
 - **Inspector** (right) — the selected placement, the map's properties, its teleport links and the encounters.
 
@@ -117,13 +117,7 @@ To place a sprite, choose it in the **Sprites** tab, select **Place** and click 
 
 ## Deferred
 
-These are not in this version, so do not look for them:
-
-- renaming a placement or a map id with the references updated (the Data Editor renames entities, not placements);
-- opening a placed object in the RPG Object Editor from the map;
-- placement-level states and variants (the state preview reads the object's own states; placement overrides and variants are not edited here).
-
-Done since the first version: rectangle selection, copy and paste of placements, effect masks on the map, and the interaction of a placement (see **Tools** and **Inspector**).
+Map/placement renaming with reference updates, opening a selected placed object in its editor, and forms for placement-specific states/variants are still deferred. Rectangle selection, copy/paste, effect masks and placement interaction pickers are available.
 
 ## If something goes wrong
 
@@ -132,3 +126,9 @@ Done since the first version: rectangle selection, copy and paste of placements,
 3. **The game does not know a new map.** Save first: the map and its scene are written on the first save only.
 4. **A placement is refused.** The object is not a sprite or an actor, the cell is outside the map, or the map belongs to another mod.
 5. **There is no encounters panel.** The game has no random battles (`rpg__battles`).
+
+## Map-owned events and optional battles
+
+Invisible trigger areas live directly in the map's `Events`: local `Id`, `X`, `Y`, `Width`, `Height`, `Trigger`, `When`, `Solid` and either `Scenario` plus `Commands` or a standalone `Teleport`. They need no object or placement. `self.done` belongs to `<map>/<event>:done`; keep the ID stable. In RPG Map Editor choose Event, drag a rectangle, enter commands, Apply event and Save.
+
+**One-time rewards.** The Give item picker writes the grant action only. To prevent repeated rewards, add a saved flag and a state or event condition; a map event can use `self.done != 1` and finish with `flag self.done 1`.

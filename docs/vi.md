@@ -18,8 +18,8 @@ Nhấn **Đối tượng mới…** dưới bảng chọn để mở biểu mẫ
 
 ![RPG Map Editor trên ngôi nhà của trưởng làng trong RPG Plus: thanh công cụ có bộ chọn bản đồ, Save, Undo, Redo và các công cụ; bảng vật thể bên trái với tab Surfaces; bản đồ ở giữa; bảng thuộc tính bên phải có kích thước bản đồ, điểm xuất hiện, liên kết dịch chuyển và trận chiến.](assets/rpg-editor-open.jpg)
 
-- **Thanh công cụ** — mod và tệp bản đồ (**+** tạo bản đồ mới), **Save**, **Undo**, **Redo**, năm công cụ, bộ chọn mã va chạm, bộ chọn phép chiếu (**Top-down** hoặc **Isometric**) và **Fit**, hiển thị toàn bộ bản đồ.
-- **Bảng vật thể** (bên trái) — các vật thể RPG của mod, chia bốn tab theo hình dạng: **Surfaces** (nền), **Segments** (một ô tường hoặc hàng rào), **Sprites** (vật thể trên lưới) và **Actors** (nhân vật đứng trên một ô). Mỗi tab có tìm kiếm theo tên hoặc id và ảnh thu nhỏ ở mỗi dòng.
+- **Thanh công cụ** — mod và tệp bản đồ (**+** tạo bản đồ mới), **Save**, **Undo**, **Redo**, bảy công cụ, bộ chọn mã va chạm, bộ chọn phép chiếu (**Top-down** hoặc **Isometric**) và **Fit**, hiển thị toàn bộ bản đồ.
+- **Bảng chọn** (trái) — bốn tab theo dạng **Surfaces**, **Segments**, **Sprites**, **Actors**, thêm **Characters** cho nhân vật có `Charset`. Mỗi tab có tìm kiếm và hình thu nhỏ.
 - **Bản đồ** (giữa) — bản đồ do chính bộ dựng hình của trò chơi vẽ. Khung mảnh cho biết các ô mà mỗi vị trí đặt chiếm; vị trí đang chọn được tô đầy.
 - **Bảng thuộc tính** (bên phải) — vị trí đang chọn, thuộc tính của bản đồ, liên kết dịch chuyển và trận chiến.
 
@@ -66,14 +66,7 @@ Khi kéo để vẽ nền, các ô của nét vẽ được hiện ra. Mỗi né
 
 ## Chưa có
 
-Các mục sau không có trong phiên bản hiện tại; đừng tìm kiếm:
-
-- đổi tên id của vị trí hoặc bản đồ, có cập nhật các tham chiếu;
-- chọn theo hình chữ nhật, sao chép và dán vị trí;
-- mở một vật thể đã đặt trong Trình chỉnh sửa đối tượng RPG ngay từ bản đồ;
-- trạng thái và biến thể của vị trí đặt: xem trước trạng thái đọc các trạng thái riêng của đối tượng; ghi đè trạng thái theo vị trí và biến thể không sửa ở đây;
-- vẽ mặt nạ hiệu ứng khí quyển lên bản đồ — không chỉnh sửa ở đây; để chỉnh diện mạo hãy dùng Effects Editor;
-- **Tương tác**, vật phẩm nhặt: **Đặt lên bản đồ** trong trình soạn vật phẩm đưa đối tượng nhặt lên bản đồ; vật phẩm được trao khi vị trí đặt có tương tác **Trao vật phẩm** (đặt trong bảng thuộc tính).
+Chưa có đổi tên bản đồ/vị trí kèm cập nhật tham chiếu, mở vật thể đã chọn trong trình sửa riêng, và biểu mẫu trạng thái/biến thể của từng vị trí. Chọn hình chữ nhật, sao chép/dán, mặt nạ hiệu ứng và bộ chọn tương tác đã có.
 
 ## Khi có lỗi
 
@@ -82,3 +75,23 @@ Các mục sau không có trong phiên bản hiện tại; đừng tìm kiếm:
 3. **Trò chơi không biết bản đồ mới.** Hãy lưu trước: bản đồ và cảnh chỉ được ghi ở lần lưu đầu tiên.
 4. **Vị trí bị từ chối.** Vật thể không phải sprite hoặc nhân vật, ô nằm ngoài bản đồ, hoặc bản đồ thuộc mod khác.
 5. **Không có bảng trận chiến.** Trò chơi không có trận chiến ngẫu nhiên (`rpg__battles`).
+
+## Sự kiện thuộc bản đồ và chiến đấu tùy chọn
+
+Vùng vô hình được lưu trực tiếp trong `Events` của bản đồ: `Id` cục bộ, `X`, `Y`, `Width`, `Height`, `Trigger`, `When`, `Solid`, cùng `Scenario` và `Commands` hoặc `Teleport` riêng. Không cần đối tượng hay vị trí đặt. `self.done` thuộc `<map>/<event>:done`; giữ ID ổn định. Trong trình sửa, chọn Event, kéo hình chữ nhật, nhập lệnh, Apply event rồi Save.
+
+## Chọn, hiệu ứng và chơi thử
+
+Trong Select, kéo hình chữ nhật để chọn nhiều vị trí. Ctrl+A chọn hết, Ctrl+C sao chép, Ctrl+V dán vào ô dưới con trỏ, giữ khoảng cách tương đối. Mỗi thao tác hoàn tác một bước. Kéo mũi tên dịch chuyển để đổi điểm đi/đến; điểm đến từ bản đồ khác lưu ở tệp nguồn hoặc bản vá của mod chọn.
+
+Trong **Effects**, chọn hồ sơ, LMB tô mặt nạ, RMB xóa. **Open map editor** của Effects Editor mở công cụ với hồ sơ đã chọn. Mặt nạ rỗng bị bỏ.
+
+**Collision** hiển thị ô chặn bằng màu đỏ trong cả hai phép chiếu. LMB tô mã chọn; RMB ghi `o`, mở đường xuyên cả vật thể. `#` chặn, `.` giao lại cho `Solid` và `Footprint.Solid`. Một nét là một bước Ctrl+Z/Y.
+
+Sự kiện không hình có bốn tay nắm góc trong Select. Kéo đổi `X`, `Y`, `Width`, `Height` cùng một bước; vị trí kiểu cũ đổi `Footprint.Size`. Vùng tối thiểu một ô và nằm trong bản đồ.
+
+Save chỉ thêm phụ thuộc thiếu vào `depends`, giữ nguyên tệp chủ sở hữu. **Play from here** lưu rồi vào bản đồ ở ô bấm cuối (hoặc điểm xuất hiện), cần game RPG đang chạy. Ngoài bốn tab bề mặt, đoạn, sprite, actor còn có **Characters** để đặt nhân vật có `Charset`.
+
+Chỉ **Gives an item** sẽ cho lặp mỗi lần dùng. Muốn một lần cần cờ và trạng thái hoặc điều kiện. Sự kiện có thể dùng điều kiện `self.done != 1`, kết thúc bằng `flag self.done 1`.
+
+Lần đầu: tạo mod trong sơ đồ RPG Plus, vào game, tạo và lưu bản đồ, tô nền và đặt rương, chọn tương tác trong bảng thuộc tính. Thêm cửa dạng sự kiện và NPC có kịch bản. Đồng đội có `Charset` và tùy chọn gia nhập sau hội thoại được đặt từ Characters; lời thoại chạy trước khi gia nhập. Dùng Play from here và E/F để kiểm tra.
