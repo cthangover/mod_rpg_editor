@@ -131,7 +131,7 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
                         Check(gameId == Game, $"the game is RPG Plus ({gameId})");
                     }
                     Shot("wizard");
-                    form.EmitSignal(AcceptDialog.SignalName.Confirmed);
+                    form.GetOkButton().EmitSignal(BaseButton.SignalName.Pressed);
                     break;
                 case 3:
                     modPath = Path.Combine(ModRoots.ModsPath, ModId);
@@ -151,7 +151,7 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
                     var notice = FindNotice(Tr("mod_manager/newmod_title"));
                     Check(notice != null && notice.DialogText.Contains(ModId), "the wizard says the mod joined the game");
                     Shot("done");
-                    notice?.EmitSignal(AcceptDialog.SignalName.Confirmed);
+                    notice?.GetOkButton().EmitSignal(BaseButton.SignalName.Pressed);
                     break;
                 case 5:
                     Check(FindNotice(Tr("mod_manager/newmod_title")) == null, "the notice closes");
