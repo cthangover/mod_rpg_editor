@@ -9,10 +9,13 @@ namespace Cthangover.Tools.RpgEditor
     {
         /// <summary>Resolved renderer lights, already in cell coordinates.</summary>
         public List<TileLight> PreviewLights { get; } = new();
-        /// <summary>White keeps the map editor's ordinary working view; null uses the phase weights.</summary>
+        /// <summary>White keeps the map editor's ordinary working view; null uses the phase colour alone.</summary>
         public Color? PreviewAmbient { get; set; } = Colors.White;
-        /// <summary>Time phase for this preview, independent of the saved map.</summary>
-        public Vector4 PreviewTimeWeights { get; set; } = new(0, 0, 0, 1);
+        /// <summary>
+        /// Time phase for this preview, independent of the saved map. Day by default: the shader multiplies the phase
+        /// colour by the map's ambient, so white ambient on day gives the plain map colours of the editor.
+        /// </summary>
+        public Vector4 PreviewTimeWeights { get; set; } = new(0, 1, 0, 0);
         /// <summary>Independent light handles, excluded from resources, scenery and collision.</summary>
         public List<TileLight> LightMarkers { get; } = new();
         /// <summary>Selected handle index, or -1.</summary>

@@ -5,7 +5,8 @@ namespace Cthangover.Tools.RpgEditor.Lighting
     using System.Linq;
     using System.Text.Json;
     using System.Text.Json.Nodes;
-    using Cthangover.Core.Mods;
+    using Cthangover.Core.Games;
+using Cthangover.Core.Mods;
     using Cthangover.Core.Mods.Resolvers;
     using Cthangover.Core.Scenes;
     using Cthangover.Core.Settings;
@@ -106,6 +107,8 @@ namespace Cthangover.Tools.RpgEditor.Lighting
         public string RadiusHintKey => "tools/rpg_editor/light_radius_tip";
         public string HintKey => "tools/rpg_editor/light_hint";
         public string SourceText => document?.Data?["Lights"]?.ToJsonString() ?? "[]";
+        /// <summary>Names the open mod and map so a hot reload can reopen the same resource in a new target instance.</summary>
+        public string Location => document == null ? null : mod + "\n" + currentMap;
         /// <summary>The map document, shared with the ordinary map editor's history and writer.</summary>
         public RpgMapDocument Document => document;
         /// <summary>The actual projected canvas, also used by the ordinary map editor.</summary>
@@ -130,11 +133,28 @@ namespace Cthangover.Tools.RpgEditor.Lighting
             changingMod = true;
             ApplySource();
             if (current != null && maps.Contains(current)) OpenMap(mod, current);
-            var iso = TileRendererRegistry.Instance.Ids.Contains(RpgEditorCanvas.Isometric);
-            projection.SetItemDisabled(0, !TileRendererRegistry.Instance.Ids.Contains(RpgEditorCanvas.TopDown));
+            var ids = TileRendererRegistry.Instance.Ids;
+            // The game's configured renderer is the projection the map is meant to be judged in.
+            var configured = ActiveGame.GetSetting("tile.renderer");
+            var known = configured == RpgEditorCanvas.TopDown || configured == RpgEditorCanvas.Isometric;
+            var iso = known && ids.Contains(configured) ? configured == RpgEditorCanvas.Isometric : ids.Contains(RpgEditorCanvas.Isometric);
+            projection.SetItemDisabled(0, !ids.Contains(RpgEditorCanvas.TopDown));
             projection.SetItemDisabled(1, !iso);
             projection.Select(iso ? 1 : 0);
             canvas.SetProjection(iso ? RpgEditorCanvas.Isometric : RpgEditorCanvas.TopDown);
+        }
+
+        /// <summary>Reopens the map named by an earlier Location, so a mod reload keeps the same map selected.</summary>
+        public void Reopen(string location)
+        {
+            var parts = location?.Split('\n');
+            if (parts == null || parts.Length != 2) return;
+            var index = mods.IndexOf(parts[0]);
+            if (index < 0) return;
+            currentMap = parts[1];
+            pendingMod = index;
+            changingMod = true;
+            ApplySource();
         }
 
         private static List<(string Path, string Text)> ReadFiles(string modId)
@@ -201,7 +221,7 @@ namespace Cthangover.Tools.RpgEditor.Lighting
             if (document == null || canvas.Scene == null) return;
             var map = RpgEditorScene.MapOf(document.Data);
             map.Lights = controller.Lights;
-            canvas.PreviewAmbient = !night.ButtonPressed && (map.LightMode == "cycle" || map.LightMode == null)
+            canvas.PreviewAmbient = (map.LightMode == "cycle" || map.LightMode == null)
                 && Color.HtmlIsValid(map.Ambient) ? Color.FromHtml(map.Ambient) : null;
             canvas.PreviewTimeWeights = night.ButtonPressed ? new Vector4(0, 0, 0, 1)
                 : LocationLighting.Weights(GameData.Instance?.Runtime?.Time?.Normalized ?? 12f, map.LightMode, false, true);
