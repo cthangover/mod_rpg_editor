@@ -22,6 +22,10 @@
   ],
   "test_suites": [
     {
+      "id": "geometry",
+      "activate": ["--itest=rpg_editor_geometry"]
+    },
+    {
       "id": "edit",
       "activate": [
         "--itest=rpg_editor_edit"

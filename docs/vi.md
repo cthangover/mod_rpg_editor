@@ -4,6 +4,13 @@ Trình chỉnh sửa bản đồ RPG thay đổi các bản đồ ô gạch củ
 
 Mở từ hộp công cụ (cái búa trên thanh công cụ) với tên **RPG Map Editor**. Cửa sổ mở trên bản đồ mà trò chơi đang hiển thị; muốn mở bản đồ khác, dùng bộ chọn bản đồ.
 
+## Kích thước lưới và vị trí ảnh nền
+
+Trong phần bản đồ bên phải, đặt **Chiều rộng, ô** và **Chiều cao, ô**, rồi nhấn **Đổi kích thước bản đồ**. Cột và hàng mới được thêm ở cuối; các ô, nhân vật và sự kiện cũ giữ nguyên tọa độ. Có thể sửa ô mới ngay. Khi thu nhỏ, vật thể, sự kiện và điểm xuất hiện không được nằm ngoài bản đồ. **Hiện lưới** bật hoặc tắt các đường xem trước.
+
+Trong **Ảnh nền**, chọn ảnh rồi chỉnh X/Y theo từng pixel gốc của bản đồ trước khi phóng. Khung vẽ xem trước ngay; **Áp dụng vị trí** ghi một bước hoàn tác. Lưới, sự kiện, nhân vật và tỷ lệ ảnh không đổi. Các phần ảnh riêng cho từng góc chiếu có vị trí độc lập. **Lưu** giữ kích thước và vị trí; Ctrl+Z hoàn tác thay đổi đã áp dụng.
+
+
 ## Tạo sự kiện và đối tượng ngay trên bản đồ
 
 Nhấn **Sự kiện** rồi kéo hình chữ nhật. Chọn **Khi bước lên** hoặc **Khi dùng (E / F)**, nhập lệnh, nhấn **Áp dụng sự kiện** rồi lưu. Không cần tạo đối tượng hoặc tệp kịch bản riêng.

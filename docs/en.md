@@ -5,6 +5,13 @@ The RPG Map Editor changes the tile maps of the RPG world while the game runs. Y
 It opens from the tool box (the hammer on the toolbar) as **RPG Map Editor**. It opens on the map the game is showing; use the map picker to open another one.
 
 
+## Grid size and background position
+
+In the right-hand **Map** section, set **Width, cells** and **Height, cells**, then press **Resize map**. New columns and rows are appended; existing cells, characters and events retain their coordinates. You can edit the new cells immediately. Shrinking must not leave objects, events or the spawn outside the map. **Show grid** controls the preview lines.
+
+Under **Background picture**, choose the picture and adjust **Picture X, px** / **Picture Y, px** in steps of one native map pixel before zoom. The canvas previews the change immediately; **Apply position** records one undo step. The grid, events, characters and picture scale stay unchanged. Parts dedicated to different projections have independent positions. **Save** persists dimensions and picture placement; Ctrl+Z undoes an applied change.
+
+
 ## Create an event or object from the map
 
 Press **Event** and drag a rectangle over the tiles. In the inspector, choose **When stepped on** or **On use (E / F)**, type scenario commands, press **Apply event**, then **Save**. Short scripts stay right here: no separate object or scenario file is needed.

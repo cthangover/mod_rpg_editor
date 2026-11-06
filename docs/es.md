@@ -4,6 +4,13 @@ El Editor de mapas RPG cambia los mapas de losetas del mundo RPG mientras el jue
 
 Se abre desde la caja de herramientas (el martillo de la barra) como **RPG Map Editor**. Se abre en el mapa que muestra el juego; para abrir otro, use el selector de mapas.
 
+## Tamaño de cuadrícula y posición del fondo
+
+En **Mapa**, ajusta **Anchura, casillas** y **Altura, casillas** y pulsa **Cambiar tamaño del mapa**. Las columnas y filas nuevas se añaden al final; las casillas, los personajes y los eventos existentes conservan sus coordenadas. Las casillas nuevas se pueden editar de inmediato. Al reducir el tamaño no deben quedar objetos, eventos ni el punto de inicio fuera del mapa. **Mostrar cuadrícula** controla las líneas de vista previa.
+
+En **Imagen de fondo**, elige la imagen y ajusta sus coordenadas X/Y en pasos de un píxel original del mapa antes del zoom. La vista previa se actualiza al instante; **Aplicar posición** registra un paso de deshacer. La cuadrícula, los eventos, los personajes y la escala de la imagen no cambian. Las partes exclusivas de cada proyección tienen posiciones independientes. **Guardar** conserva el tamaño y la posición; Ctrl+Z deshace un cambio aplicado.
+
+
 ## Crear eventos y objetos desde el mapa
 
 Pulsa **Evento** y arrastra un rectángulo sobre las casillas. Elige **Al pisar** o **Al usar (E / F)**, escribe comandos, pulsa **Aplicar evento** y **Guardar**. No necesitas crear un objeto ni un archivo de guion aparte.

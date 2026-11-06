@@ -73,6 +73,12 @@ namespace Cthangover.Tools.RpgEditor
             /// <summary>The selected placement's effective object id, or null.</summary>
             public string ObjectId { get; init; }
 
+            /// <summary>Effective picture scale of the selected placement; null for events and invisible markers.</summary>
+            public float? PictureScale { get; init; }
+
+            /// <summary>Reads the current effective scale after live edits without rebuilding this column.</summary>
+            public Func<string, float> ScaleOf { get; init; }
+
             /// <summary>The selected placement's interaction as the game reads it (its object's, with the placement's override), or null.</summary>
             public RpgInteract Interact { get; init; }
 
@@ -94,6 +100,12 @@ namespace Cthangover.Tools.RpgEditor
 
             /// <summary>Map size shown in the map section.</summary>
             public Vector2I MapSize { get; init; }
+
+            /// <summary>Rectangular scenery that can be positioned in pixels in the current projection.</summary>
+            public IReadOnlyList<(string Id, RpgObject Object)> Backdrops { get; init; } = Array.Empty<(string, RpgObject)>();
+
+            /// <summary>The projection whose background position is being edited.</summary>
+            public string Projection { get; init; } = RpgEditorCanvas.TopDown;
 
             /// <summary>Variant names the loaded objects define, for the map's variant picker.</summary>
             public IReadOnlyList<string> Variants { get; init; } = Array.Empty<string>();
@@ -127,6 +139,8 @@ namespace Cthangover.Tools.RpgEditor
         public event Action<string, RpgInteract> InteractChanged;
         /// <summary>The selected actor route changed.</summary>
         public event Action<string, JsonNode> RouteChanged;
+        public event Action<RpgRouteEditor> RouteDrawingRequested;
+        public event Action<RpgRouteEditor> RoutePreviewChanged;
 
         /// <summary>One explicit Apply of the independent event form, preserving its stable id.</summary>
         public event Action<string, JsonObject> EventChanged;
@@ -137,10 +151,10 @@ namespace Cthangover.Tools.RpgEditor
         /// <summary>Rebuilds the column for <paramref name="state"/>.</summary>
         public void Show(State state)
         {
+            scaleControls.Clear();
+            backdropScale = null;
             foreach (var child in GetChildren())
             {
-        public event Action<RpgRouteEditor> RouteDrawingRequested;
-        public event Action<RpgRouteEditor> RoutePreviewChanged;
                 RemoveChild(child);
                 child.QueueFree();
             }
@@ -195,6 +209,8 @@ namespace Cthangover.Tools.RpgEditor
             spinY.ValueChanged += v => PlacementMoved?.Invoke(id, (int)spinX.Value, (int)v);
             ToolUi.Field(box, "tools/rpg_editor/placement_x", spinX);
             ToolUi.Field(box, "tools/rpg_editor/placement_y", spinY);
+            if (state.PictureScale is { } pictureScale)
+                AddScale(box, "PlacementScale", id, pictureScale);
 
             var actions = new HBoxContainer();
             actions.AddThemeConstantOverride("separation", UiTokens.Space2);
@@ -211,6 +227,8 @@ namespace Cthangover.Tools.RpgEditor
             {
                 var editor = new RpgRouteEditor(state.Placement, state.Route);
                 editor.RouteChanged += ForwardRoute;
+                editor.DrawingRequested += ForwardRouteDrawing;
+                editor.PreviewChanged += ForwardRoutePreview;
                 box.AddChild(editor);
             }
             // Extension point of the state preview (plan 14.G11, file View/RpgStatePreview.cs): self. flags, not saved.
@@ -225,10 +243,10 @@ namespace Cthangover.Tools.RpgEditor
         /// the kind. Only the rows of the current kind are built; a change is written at once through <see cref="InteractChanged"/>.
         /// </summary>
         private void ForwardRoute(string id, JsonNode route) => RouteChanged?.Invoke(id, route);
+        private void ForwardRouteDrawing(RpgRouteEditor editor) => RouteDrawingRequested?.Invoke(editor);
+        private void ForwardRoutePreview(RpgRouteEditor editor) => RoutePreviewChanged?.Invoke(editor);
 
         private void AddInteract(VBoxContainer box, State state)
-                editor.DrawingRequested += ForwardRouteDrawing;
-                editor.PreviewChanged += ForwardRoutePreview;
         {
             var id = state.Placement;
             // A character actor that joins keeps its join after the author's part (plan 14.G16): the pickers read only that part.
@@ -243,8 +261,6 @@ namespace Cthangover.Tools.RpgEditor
 
             kindChoices.Clear();
             kindChoices.AddRange(PickableKinds);
-        private void ForwardRouteDrawing(RpgRouteEditor editor) => RouteDrawingRequested?.Invoke(editor);
-        private void ForwardRoutePreview(RpgRouteEditor editor) => RoutePreviewChanged?.Invoke(editor);
             if (kind == RpgInteractKind.Custom)
                 kindChoices.Add(RpgInteractKind.Custom);
             kindPicker = new OptionButton { Name = "InteractKind" };
@@ -468,7 +484,7 @@ namespace Cthangover.Tools.RpgEditor
             var doc = state.Document;
             var box = new VBoxContainer();
             AddChild(box);
-            box.AddChild(ToolUi.Hint(string.Format(ToolUi.Tr("tools/rpg_editor/map_size"), state.MapSize.X, state.MapSize.Y)));
+            AddMapGeometry(box, state);
             if (doc.IsForeign)
                 box.AddChild(ToolUi.Hint(string.Format(ToolUi.Tr("tools/rpg_editor/map_foreign"), doc.Map?.OwnerMod)));
 

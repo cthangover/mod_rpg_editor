@@ -1,0 +1,5 @@
+{
+  "name": "RPG map grid and backdrop editor test",
+  "sources": ["src/*.cs"],
+  "depends": ["rpg_plus_game>=0.1.0"]
+}

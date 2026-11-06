@@ -657,7 +657,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
         private void WriteDependencyMap()
         {
             suiteManifest = ModFileService.ReadText(SuiteMod, ManifestFile);
-            Check(suiteManifest != null && suiteManifest.Contains("\"rpg_plus_game>=1\""), "the suite's manifest is read before the change");
+            Check(suiteManifest != null && suiteManifest.Contains("\"rpg_plus_game>=0.1.0\""), "the suite's manifest is read before the change");
             var ownManifest = JsonNode.Parse(suiteManifest ?? "{}") as JsonObject ?? new JsonObject();
             ownManifest["id"] = SuiteMod;
             ownManifest["depends"] = new JsonArray(JsonValue.Create("rpg>=1"));

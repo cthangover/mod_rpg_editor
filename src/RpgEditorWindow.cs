@@ -6,6 +6,7 @@ namespace Cthangover.Tools.RpgEditor
     using System.Linq;
     using System.Text.Json.Nodes;
     using Cthangover.Core.Events;
+    using Cthangover.Core.Games;
     using Cthangover.Core.Mods;
     using Cthangover.Core.Mods.Resolvers;
     using Cthangover.Core.Scenes;
@@ -397,7 +398,16 @@ namespace Cthangover.Tools.RpgEditor
         {
             var outer = CreateFillContainer();
             AddChild(outer);
-            outer.AddChild(BuildToolbar());
+            // Long translated toolbar labels must not push the inspector outside the window.
+            var toolbarScroll = new ScrollContainer
+            {
+                Name = "RpgToolbarScroll",
+                HorizontalScrollMode = ScrollContainer.ScrollMode.Auto,
+                VerticalScrollMode = ScrollContainer.ScrollMode.Disabled,
+                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            };
+            toolbarScroll.AddChild(BuildToolbar());
+            outer.AddChild(toolbarScroll);
 
             var main = new HSplitContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, SizeFlagsVertical = Control.SizeFlags.ExpandFill };
             outer.AddChild(main);
@@ -429,9 +439,17 @@ namespace Cthangover.Tools.RpgEditor
             inspector = new RpgEditorInspector { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
             inspector.PlacementMoved += OnPlacementMoved;
             inspector.RouteChanged += OnRouteChanged;
+            inspector.RouteDrawingRequested += BeginRouteDrawing;
+            inspector.RoutePreviewChanged += OnRoutePreview;
             inspector.PlacementDeleted += id => DeletePlacement(id);
             inspector.PlacementReset += OnPlacementReset;
             inspector.PropertyChanged += OnPropertyChanged;
+            inspector.MapSizeChanged += OnMapSizeChanged;
+            inspector.BackdropPositionChanged += OnBackdropPositionChanged;
+            inspector.BackdropPreviewChanged += OnBackdropPreviewChanged;
+            inspector.ScalePreviewChanged += OnScalePreviewChanged;
+            inspector.ScaleChanged += OnScaleChanged;
+            inspector.GridVisibilityChanged += OnGridVisibilityChanged;
             inspector.EventChanged += OnEventChanged;
             inspector.SpawnPickRequested += () => SelectTool(RpgEditorTool.Spawn);
             inspector.EncountersChanged += table => ChangeProperty("Encounters", table);
@@ -439,9 +457,8 @@ namespace Cthangover.Tools.RpgEditor
             WireInteractParts();
             scroll.AddChild(inspector);
             right.AddChild(scroll);
-            inspector.RouteDrawingRequested += BeginRouteDrawing;
-            inspector.RoutePreviewChanged += OnRoutePreview;
             main.AddChild(CreateSidebar(right, 320));
+            UseGameProjection();
         }
 
         private HBoxContainer BuildToolbar()
@@ -503,6 +520,15 @@ namespace Cthangover.Tools.RpgEditor
             bar.AddChild(projectionPicker);
             bar.AddChild(ToolUi.Button("tools/rpg_editor/fit", () => canvas?.FitToView(), ButtonKind.Secondary, "tools/rpg_editor/fit_tip"));
             return bar;
+        }
+
+        /// <summary>Opens the editor in the projection the game draws its maps with, so painted collision lines up with the game.</summary>
+        private void UseGameProjection()
+        {
+            var id = ActiveGame.GetSetting("tile.renderer");
+            if ((id != RpgEditorCanvas.Isometric && id != RpgEditorCanvas.TopDown) || !RpgEditorCanvas.HasProjection(id)) return;
+            canvas.SetProjection(id);
+            projectionPicker.Select(id == RpgEditorCanvas.Isometric ? 1 : 0);
         }
 
         // ── files ──────────────────────────────────────────────────
@@ -844,7 +870,8 @@ namespace Cthangover.Tools.RpgEditor
             var index = id == RpgEditorCanvas.Isometric ? 1 : 0;
             if (projectionPicker != null && projectionPicker.Selected != index)
                 projectionPicker.Select(index);
-            RebuildMarks();
+            // A projection switch discards an unapplied background preview as well as its form values.
+            RebuildScene();
         }
 
         // ── canvas input ───────────────────────────────────────────
@@ -854,6 +881,7 @@ namespace Cthangover.Tools.RpgEditor
             if (document == null)
                 return;
             lastCell = cell;
+            if (DrawRouteCell(cell, button)) return;
             if (button == MouseButton.Left && TryPickTargetCell(cell))
                 return;
             if (button == MouseButton.Right)
@@ -881,7 +909,6 @@ namespace Cthangover.Tools.RpgEditor
                 case RpgEditorTool.Effects:
                     BeginStroke(cell, button);
                     break;
-            if (DrawRouteCell(cell, button)) return;
                 case RpgEditorTool.Place:
                     PlaceAt(cell);
                     break;
@@ -901,6 +928,7 @@ namespace Cthangover.Tools.RpgEditor
 
         private void OnCellDragged(Vector2I cell, MouseButton button)
         {
+            if (DrawRouteCell(cell, button)) return;
             if (handleKind != RpgHandleKind.None)
             {
                 dragTo = cell;
@@ -928,7 +956,7 @@ namespace Cthangover.Tools.RpgEditor
 
         private void OnCellReleased(Vector2I cell, MouseButton button)
         {
-            if (DrawRouteCell(cell, button)) return;
+            if (GodotObject.IsInstanceValid(routeDrawing)) return;
             if (document == null)
                 return;
             if (handleKind != RpgHandleKind.None)
@@ -956,7 +984,6 @@ namespace Cthangover.Tools.RpgEditor
                 if (changed)
                     AfterChange();
                 else
-            if (GodotObject.IsInstanceValid(routeDrawing)) return;
                     RebuildMarks();
                 return;
             }
@@ -1092,8 +1119,9 @@ namespace Cthangover.Tools.RpgEditor
         // ── rebuilding what is shown ───────────────────────────────
 
         /// <summary>Rebuilds the scene from the document (after a change) and shows it.</summary>
-        private void RebuildScene()
+        private void RebuildScene(bool refreshInspector = true)
         {
+            if (refreshInspector) previewBackdropId = null;
             if (document == null)
             {
                 canvas?.Clear();
@@ -1125,7 +1153,8 @@ namespace Cthangover.Tools.RpgEditor
             if (selectedId != null && !document.SelectionIds.Contains(selectedId))
                 selectedId = null;
             RebuildMarks();
-            RefreshInspector();
+            if (refreshInspector) RefreshInspector();
+            else if (previewBackdropId != null) ShowBackdropPreview(scene.Statics);
             UpdateButtons();
         }
 
@@ -1210,11 +1239,14 @@ namespace Cthangover.Tools.RpgEditor
                 marks.Add(new CanvasRect(landing.X, landing.Y, moving.Width, moving.Height, GhostFill, true));
                 marks.Add(new CanvasRect(landing.X, landing.Y, moving.Width, moving.Height, HoverLine, false));
             }
+            UpdateRouteOverlay();
             canvas.Refresh();
         }
 
         private void RefreshInspector()
         {
+            routePreview = null;
+            routeDrawing = null;
             if (inspector == null)
                 return;
             if (document == null || scene == null)
@@ -1237,22 +1269,28 @@ namespace Cthangover.Tools.RpgEditor
             inspector.Show(new RpgEditorInspector.State
             {
                 Document = document,
+                Projection = canvas.Projection,
+                Backdrops = scene.Statics.Where(p => RpgBackdropEdit.Part(p.Object, canvas.Projection) != null)
+                    .Select(p => (p.Id, p.Object)).ToList(),
                 Placement = selectedId,
                 Arrival = incoming.FirstOrDefault(l => l.Placement == arrivalId),
-            UpdateRouteOverlay();
                 ObjectId = selectedObject,
+                ScaleOf = id => scene?.ObjectOf(id)?.Scale ?? 1,
+                PictureScale = selectedId != null && document.EventOf(selectedId) == null
+                    && scene.ObjectOf(selectedId) is { } selectedPicture && !RpgMarkers.IsPictureless(selectedPicture)
+                    ? selectedPicture.Scale : null,
                 Route = selectedId == null ? null : scene.ObjectOf(selectedId)?.Route,
                 IsActor = selectedId != null && scene.ObjectOf(selectedId)?.Form == RpgObjectForm.Actor,
                 Outgoing = outgoing,
                 Incoming = incoming,
-            routePreview = null;
-            routeDrawing = null;
                 MapSize = new Vector2I(scene.Map.Width, scene.Map.Height),
                 Encounters = encountersShown,
                 Interact = InteractOfSelected(),
                 ObjectInteract = selectedObject == null ? null : ObjectOf(selectedObject)?.Interact,
                 Variants = VariantNames(),
             });
+            UpdateRouteOverlay();
+            canvas.Refresh();
         }
 
         private void UpdateButtons()
@@ -1289,8 +1327,6 @@ namespace Cthangover.Tools.RpgEditor
                         return SelectAll();
                     case Key.C:
                         CopySelection();
-            UpdateRouteOverlay();
-            canvas.Refresh();
                         return true;
                     case Key.V:
                         PasteClipboard();
@@ -1305,6 +1341,10 @@ namespace Cthangover.Tools.RpgEditor
                     return true;
                 case Key.Escape when targetPick != null:
                     CancelTargetPick();
+                    return true;
+                case Key.Escape when GodotObject.IsInstanceValid(routeDrawing):
+                    routeDrawing = null;
+                    RebuildMarks();
                     return true;
                 case Key.Escape:
                     selectedId = null;
@@ -1324,7 +1364,3 @@ namespace Cthangover.Tools.RpgEditor
 
     }
 }
-                case Key.Escape when GodotObject.IsInstanceValid(routeDrawing):
-                    routeDrawing = null;
-                    RebuildMarks();
-                    return true;

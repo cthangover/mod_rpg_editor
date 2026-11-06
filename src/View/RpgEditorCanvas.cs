@@ -32,6 +32,9 @@ namespace Cthangover.Tools.RpgEditor
         private ITileWorldPresentation view;
         private TileRenderScene scene;
         private string projection = TopDown;
+
+        /// <summary>Whether the editable map's cell lines and boundary are shown over its scenery.</summary>
+        public bool ShowGrid { get; set; } = true;
         private bool fitted;
         private bool fitPending;
         private bool panning;
@@ -258,10 +261,10 @@ namespace Cthangover.Tools.RpgEditor
             fitted = false;
             fitPending = false;
             Marks.Clear();
+            Routes.Clear();
             ResizeArea = null;
             resizing = false;
             Arrows.Clear();
-            Routes.Clear();
             GhostRect = null;
             GhostTexture = null;
             overlay.QueueRedraw();
@@ -360,6 +363,7 @@ namespace Cthangover.Tools.RpgEditor
             if (panning)
             {
                 world.Position += motion.Relative;
+                Refresh();
                 AcceptEvent();
                 return;
             }
@@ -390,12 +394,14 @@ namespace Cthangover.Tools.RpgEditor
             var next = Mathf.Clamp(before * factor, MinZoom, MaxZoom);
             world.Position = anchor - (anchor - world.Position) * (next / before);
             world.Scale = Vector2.One * next;
+            Refresh();
         }
 
         private void SetCamera(float zoom, Vector2 centre)
         {
             world.Scale = Vector2.One * zoom;
             world.Position = centre * (1f - zoom);
+            Refresh();
         }
 
         private void OnResized()
@@ -432,6 +438,7 @@ namespace Cthangover.Tools.RpgEditor
         {
             if (view == null)
                 return;
+            PaintMapGrid(target);
             PaintLightMarkers(target);
             foreach (var mark in Marks)
             {
@@ -453,6 +460,7 @@ namespace Cthangover.Tools.RpgEditor
             }
             foreach (var arrow in Arrows)
                 arrow.Draw(target, cell => view.ProjectToView(new Vector3(cell.X, cell.Y, 0)));
+            PaintRoutes(target);
             if (GhostTexture != null && GhostRect != null)
             {
                 var ghost = GhostRect;
@@ -460,7 +468,6 @@ namespace Cthangover.Tools.RpgEditor
                 var size = GhostTexture.GetSize() * (scene?.Zoom ?? 1f);
                 target.DrawTextureRect(GhostTexture, new Rect2(anchor.X - size.X / 2f, anchor.Y - size.Y, size.X, size.Y), false, GhostTint);
             }
-            PaintRoutes(target);
         }
 
         private Vector2[] Outline(CanvasRect rect)
