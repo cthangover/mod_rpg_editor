@@ -261,6 +261,7 @@ namespace Cthangover.Tools.RpgEditor
             ResizeArea = null;
             resizing = false;
             Arrows.Clear();
+            Routes.Clear();
             GhostRect = null;
             GhostTexture = null;
             overlay.QueueRedraw();
@@ -459,6 +460,7 @@ namespace Cthangover.Tools.RpgEditor
                 var size = GhostTexture.GetSize() * (scene?.Zoom ?? 1f);
                 target.DrawTextureRect(GhostTexture, new Rect2(anchor.X - size.X / 2f, anchor.Y - size.Y, size.X, size.Y), false, GhostTint);
             }
+            PaintRoutes(target);
         }
 
         private Vector2[] Outline(CanvasRect rect)

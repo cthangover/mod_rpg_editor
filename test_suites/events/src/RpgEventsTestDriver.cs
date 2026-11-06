@@ -9,6 +9,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.Events
     using Cthangover.Core.Scenes;
     using Cthangover.Core.Utils;
     using Cthangover.Mods.Interface.Tool;
+    using Cthangover.Mods.Interface.View;
     using Cthangover.Mods.Rpg;
     using Cthangover.Mods.Rpg.Model;
     using Cthangover.Tools.RpgObjectEditor;
@@ -123,10 +124,16 @@ namespace Cthangover.Tools.RpgEditor.Tests.Events
                     Click(Cell(6, 5));
                     Check(window.Document.Placements.Any(p => p.Data["Object"]?.ToString() == objectId), "new object can be placed immediately");
                     CheckActorRoute();
+                    Click(Cell(8,6));
+                    step = 7;
+                    return;
+                case 7:
+                    Shot("route_graphical");
                     window.QueueFree();
                     window = null;
                     RpgWorldHost.Teleport(new RpgTeleport { Map = Map, X = 1, Y = 2, Dir = RpgDirection.Right });
-                    break;
+                    step = 5;
+                    return;
                 case 5:
                     var session = RpgWorldHost.Current?.Session;
                     if (session?.Map.ID != Map || session.Find(eventId) == null) return;
@@ -169,10 +176,45 @@ namespace Cthangover.Tools.RpgEditor.Tests.Events
             Click(Cell(8, 6));
             editor = window.Inspector.FindChild("ActorRoute", true, false) as RpgRouteEditor;
             Check(editor?.GetChildren().OfType<TextEdit>().Single().Text == "left\nwait:2\nright", "reselecting the actor restores the route form");
+            CheckDrawnRoute(actorId, editor);
             Click(Cell(6, 5));
             Check(window.Inspector.FindChild("ActorRoute", true, false) == null, "sprite selection has no actor route controls");
             Click(Cell(2, 2));
             Check(window.Inspector.FindChild("ActorRoute", true, false) == null, "map event selection has no actor route controls");
+        }
+
+        private void CheckDrawnRoute(string actorId, RpgRouteEditor editor)
+        {
+            PressText(editor, TranslationServer.Translate("tools/rpg_editor/route_clear"));
+            PressName(editor, "DrawRoute");
+            Click(Cell(8,7));
+            Click(Cell(9,7));
+            PressText(editor, TranslationServer.Translate("tools/rpg_editor/route_add_pause"));
+            Check(editor.SelectedSteps.SequenceEqual(new[] { "down", "right", "wait:5" }), "map clicks draw cardinal steps and add a pause at the endpoint");
+            Check(window.Scene.ObjectOf(actorId).Route.Steps.SequenceEqual(new[] { "left", "wait:2", "right" }), "drawing previews without changing saved document data");
+            Check(window.Canvas.Routes.Any(r => r.Selected && r.Path.Segments.Count == 2 && r.Path.Stops.Any(s => s.Label == "5s")), "canvas contains a selected path and timed stop marker");
+            Mouse(true, Cell(9,7));
+            window.Canvas._GuiInput(new InputEventMouseMotion { Position=Cell(9,6), ButtonMask=MouseButtonMask.Left });
+            Mouse(false, Cell(9,6));
+            Check(editor.SelectedSteps.Last() == "up", "dragging adds the next connected waypoint");
+            PressText(editor, TranslationServer.Translate("tools/rpg_editor/route_apply"));
+            Check(window.Scene.ObjectOf(actorId).Route.Steps.Count == 4, "drawn path applies as one document change");
+            Check(window.Undo() && window.Scene.ObjectOf(actorId).Route.Steps[0] == "left", "one undo removes the whole drawn draft");
+            Check(window.Redo() && window.Scene.ObjectOf(actorId).Route.Steps[0] == "down", "redo restores the drawn path");
+            editor = window.Inspector.FindChild("ActorRoute", true, false) as RpgRouteEditor;
+            PressText(editor, TranslationServer.Translate("tools/rpg_editor/route_new_variant"));
+            PressName(editor, "DrawRoute");
+            Click(Cell(8,5));
+            PressText(editor, TranslationServer.Translate("tools/rpg_editor/route_apply"));
+            var route = window.Scene.ObjectOf(actorId).Route;
+            Check(route.Variants.Count == 2 && route.Variants[1].SequenceEqual(new[] { "up" }), "new graphical alternative preserves the previous path");
+            Check(window.Save(), "graphical alternatives save normally");
+            window.OpenMapFile(Mod, "maps/"+Map+".json");
+            Check(window.Scene.ObjectOf(actorId).Route.Variants.Count == 2, "all alternatives survive map reload");
+            Click(Cell(8,6));
+            var picker = (window.Inspector.FindChild("ActorRoute", true, false) as RpgRouteEditor).GetNode<OptionButton>("RouteVariant");
+            picker.Select(1); picker.EmitSignal(OptionButton.SignalName.ItemSelected, 1L);
+            Check(window.Canvas.Routes.Any(r => r.Selected && r.Path.End == new Vector2I(8,5)), "choosing an alternative highlights its actual geometry");
         }
 
         private Vector2 Cell(int x, int y) => window.Canvas.CanvasPointOf(new Vector2I(x, y));
@@ -215,8 +257,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.Events
         {
             if (shots == null) return;
             Directory.CreateDirectory(shots);
-            using var image = GetViewport().GetTexture().GetImage();
-            image.SavePng(Path.Combine(shots, name + ".png"));
+            Check(ViewportCapture.SavePng(GetViewport(), Path.Combine(shots, name + ".png")), "saved screenshot " + name);
         }
         private void Check(bool ok, string detail)
         {

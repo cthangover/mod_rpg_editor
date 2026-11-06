@@ -139,6 +139,8 @@ namespace Cthangover.Tools.RpgEditor
         {
             foreach (var child in GetChildren())
             {
+        public event Action<RpgRouteEditor> RouteDrawingRequested;
+        public event Action<RpgRouteEditor> RoutePreviewChanged;
                 RemoveChild(child);
                 child.QueueFree();
             }
@@ -225,6 +227,8 @@ namespace Cthangover.Tools.RpgEditor
         private void ForwardRoute(string id, JsonNode route) => RouteChanged?.Invoke(id, route);
 
         private void AddInteract(VBoxContainer box, State state)
+                editor.DrawingRequested += ForwardRouteDrawing;
+                editor.PreviewChanged += ForwardRoutePreview;
         {
             var id = state.Placement;
             // A character actor that joins keeps its join after the author's part (plan 14.G16): the pickers read only that part.
@@ -239,6 +243,8 @@ namespace Cthangover.Tools.RpgEditor
 
             kindChoices.Clear();
             kindChoices.AddRange(PickableKinds);
+        private void ForwardRouteDrawing(RpgRouteEditor editor) => RouteDrawingRequested?.Invoke(editor);
+        private void ForwardRoutePreview(RpgRouteEditor editor) => RoutePreviewChanged?.Invoke(editor);
             if (kind == RpgInteractKind.Custom)
                 kindChoices.Add(RpgInteractKind.Custom);
             kindPicker = new OptionButton { Name = "InteractKind" };

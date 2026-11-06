@@ -439,6 +439,8 @@ namespace Cthangover.Tools.RpgEditor
             WireInteractParts();
             scroll.AddChild(inspector);
             right.AddChild(scroll);
+            inspector.RouteDrawingRequested += BeginRouteDrawing;
+            inspector.RoutePreviewChanged += OnRoutePreview;
             main.AddChild(CreateSidebar(right, 320));
         }
 
@@ -879,6 +881,7 @@ namespace Cthangover.Tools.RpgEditor
                 case RpgEditorTool.Effects:
                     BeginStroke(cell, button);
                     break;
+            if (DrawRouteCell(cell, button)) return;
                 case RpgEditorTool.Place:
                     PlaceAt(cell);
                     break;
@@ -925,6 +928,7 @@ namespace Cthangover.Tools.RpgEditor
 
         private void OnCellReleased(Vector2I cell, MouseButton button)
         {
+            if (DrawRouteCell(cell, button)) return;
             if (document == null)
                 return;
             if (handleKind != RpgHandleKind.None)
@@ -952,6 +956,7 @@ namespace Cthangover.Tools.RpgEditor
                 if (changed)
                     AfterChange();
                 else
+            if (GodotObject.IsInstanceValid(routeDrawing)) return;
                     RebuildMarks();
                 return;
             }
@@ -1234,11 +1239,14 @@ namespace Cthangover.Tools.RpgEditor
                 Document = document,
                 Placement = selectedId,
                 Arrival = incoming.FirstOrDefault(l => l.Placement == arrivalId),
+            UpdateRouteOverlay();
                 ObjectId = selectedObject,
                 Route = selectedId == null ? null : scene.ObjectOf(selectedId)?.Route,
                 IsActor = selectedId != null && scene.ObjectOf(selectedId)?.Form == RpgObjectForm.Actor,
                 Outgoing = outgoing,
                 Incoming = incoming,
+            routePreview = null;
+            routeDrawing = null;
                 MapSize = new Vector2I(scene.Map.Width, scene.Map.Height),
                 Encounters = encountersShown,
                 Interact = InteractOfSelected(),
@@ -1281,6 +1289,8 @@ namespace Cthangover.Tools.RpgEditor
                         return SelectAll();
                     case Key.C:
                         CopySelection();
+            UpdateRouteOverlay();
+            canvas.Refresh();
                         return true;
                     case Key.V:
                         PasteClipboard();
@@ -1314,3 +1324,7 @@ namespace Cthangover.Tools.RpgEditor
 
     }
 }
+                case Key.Escape when GodotObject.IsInstanceValid(routeDrawing):
+                    routeDrawing = null;
+                    RebuildMarks();
+                    return true;

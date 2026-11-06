@@ -15,7 +15,7 @@ namespace Cthangover.Tools.RpgEditor
         private readonly OptionButton command = new();
         private readonly SpinBox speed = new() { MinValue = 1, MaxValue = 12, Step = 0.1 };
         private readonly SpinBox interval = new() { MinValue = 0.1, MaxValue = 60, Step = 0.1 };
-        private readonly SpinBox pause = new() { MinValue = 0.1, MaxValue = 600, Step = 1, Value = 5 };
+        private readonly SpinBox pause = new() { MinValue = 0.1, MaxValue = 600, Step = 0.1, Value = 5 };
         private readonly CheckBox repeat = new();
         private readonly Label status = new();
         private readonly RpgMoveRoute original;
@@ -37,6 +37,7 @@ namespace Cthangover.Tools.RpgEditor
             foreach (var value in Commands) command.AddItem(value);
             AddChild(command);
             var add = new Button { Text = ToolUi.Tr("tools/rpg_editor/route_add") };
+            add.Name = "AddRouteInstruction";
             add.Pressed += AddCommand;
             AddChild(add);
             ToolUi.Field(this, "tools/rpg_editor/route_pause", pause);
@@ -54,15 +55,20 @@ namespace Cthangover.Tools.RpgEditor
             save.Pressed += Apply;
             AddChild(save);
             AddChild(status);
+            InitializeVariants();
         }
 
         private void AddCommand() => Append(Commands[command.Selected]);
         private void AddPause() => Append("wait:" + pause.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        private void Append(string instruction) => steps.Text = steps.Text.TrimEnd() + (steps.Text.Trim().Length == 0 ? "" : "\n") + instruction;
+        private void Append(string instruction)
+        {
+            steps.Text = steps.Text.TrimEnd() + (steps.Text.Trim().Length == 0 ? "" : "\n") + instruction;
+            VariantChanged();
+        }
         private void Apply()
         {
             var values = steps.Text.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-            foreach (var value in values)
+            foreach (var value in Preview.Steps.Concat(Preview.Variants.SelectMany(v => v)))
             {
                 if (Commands.Contains(value) || value is "random" or "toward" or "away" or "face_up" or "face_down" or "face_left" or "face_right") continue;
                 if (value.StartsWith("wait:") && double.TryParse(value.Substring(5), System.Globalization.NumberStyles.Float,
@@ -70,10 +76,10 @@ namespace Cthangover.Tools.RpgEditor
                 status.Text = ToolUi.Tr("tools/rpg_editor/route_invalid") + ": " + value;
                 return;
             }
-            var route = original == null ? new JsonObject() : System.Text.Json.JsonSerializer.SerializeToNode(original).AsObject();
+            var route = System.Text.Json.JsonSerializer.SerializeToNode(Preview).AsObject();
             var list = new JsonArray();
             foreach (var value in values) list.Add(value);
-            route["Steps"] = list;
+            if (Variant < 0) route["Steps"] = list;
             route["Speed"] = speed.Value;
             route["Every"] = interval.Value;
             route["Repeat"] = repeat.ButtonPressed;
