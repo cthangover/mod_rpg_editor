@@ -5,6 +5,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
     using System.Linq;
     using System.Text.Json;
     using System.Text.Json.Nodes;
+    using Cthangover.Core.Mods;
     using Cthangover.Core.Mods.Testing;
     using Cthangover.Core.Utils;
     using Cthangover.Mods.Rpg;
@@ -70,12 +71,14 @@ namespace Cthangover.Tools.RpgEditor.Tests
         private static Dictionary<string, RpgObjectForm> forms;
         private static Dictionary<string, JsonObject> objects;
 
-        /// <summary>The files of a mod under <c>res://mods/&lt;mod&gt;/</c>, every <c>.json</c> file except test suites, as (path relative to the mod, text).</summary>
+        /// <summary>Every JSON file except test suites under the mod's actual provider root, as (path relative to the mod, text).</summary>
         public static List<(string Path, string Text)> ReadModJson(string mod)
         {
             ModAssert.True(GameEnvironment.IsRuntime, "mod files are read with Godot FileAccess, which needs the running engine");
             var result = new List<(string Path, string Text)>();
-            CollectJson("res://mods/" + mod, string.Empty, result);
+            var provider = ModManager.Instance.GetMod(mod)?.FileProvider;
+            ModAssert.NotNull(provider, $"the mod {mod} is loaded");
+            CollectJson(provider.RootPath, string.Empty, result);
             return result;
         }
 
