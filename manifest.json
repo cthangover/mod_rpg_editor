@@ -1,7 +1,7 @@
 {
   "id": "rpg_editor",
   "name": "RPG Map Editor",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "author": "ct",
   "description": "RPG map editor for model v2 (plan 12.4): a palette by shape, the map in the game's own top-down and isometric projections, placements (own and foreign, as patches), strokes, collision, spawn, teleport links, undo and a byte-stable save; encounters when rpg__battles is mounted.",
   "category": "tools, editor",
@@ -12,13 +12,13 @@
     "tests/*.cs"
   ],
   "depends": [
-    "rpg>=1",
-    "effects_base>=1",
-    "characters_base>=1",
-    "items_base>=1",
-    "tools_base>=1",
-    "ui_base>=1",
-    "scenario_tools_base>=1"
+    "rpg>=0.1.0",
+    "effects_base>=0.1.0",
+    "characters_base>=0.1.0",
+    "items_base>=0.1.0",
+    "tools_base>=0.1.0",
+    "ui_base>=0.1.0",
+    "scenario_tools_base>=0.1.0"
   ],
   "test_suites": [
     {

@@ -127,7 +127,7 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
                     {
                         var baseId = pickers[0].GetItemMetadata(pickers[0].Selected).AsString();
                         var gameId = pickers[1].GetItemMetadata(pickers[1].Selected).AsString();
-                        Check(baseId == "rpg_plus_game>=1", $"the base is the game's own content first ({baseId})");
+                        Check(baseId == "rpg_plus_game>=0.1.0", $"the base is the game's own content first ({baseId})");
                         Check(gameId == Game, $"the game is RPG Plus ({gameId})");
                     }
                     Shot("wizard");
@@ -139,12 +139,12 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
                     using (var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(modPath, "manifest.json"))))
                     {
                         Check(doc.RootElement.GetProperty("id").GetString() == ModId, "the manifest has the id");
-                        Check(doc.RootElement.GetProperty("depends")[0].GetString() == "rpg_plus_game>=1", "the manifest depends on rpg_plus_game");
+                        Check(doc.RootElement.GetProperty("depends")[0].GetString() == "rpg_plus_game>=0.1.0", "the manifest depends on rpg_plus_game");
                     }
                     Check(File.ReadAllText(Path.Combine(modPath, "locale", "en.properties")).Contains($"mod_{ModId}_name = {ModTitle}"), "the English locale stub has the title");
                     Check(!Directory.Exists(Path.Combine(modPath, ".git")), "no repository is made");
                     var joined = ModCollectionStore.LoadUser().Single(c => c.Id == Game);
-                    Check(joined.Mechanics.Any(m => m.Mods != null && m.Mods.Contains(ModId)), "the game RPG Plus lists the mod as a block");
+                    Check(joined.Mechanics.Any(m => m.Mods != null && m.Mods.Contains(ModId + ">=0.1.0")), "the game RPG Plus lists the mod as a block");
                     WriteMarker();
                     break;
                 case 4:

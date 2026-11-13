@@ -660,7 +660,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
             Check(suiteManifest != null && suiteManifest.Contains("\"rpg_plus_game>=0.1.0\""), "the suite's manifest is read before the change");
             var ownManifest = JsonNode.Parse(suiteManifest ?? "{}") as JsonObject ?? new JsonObject();
             ownManifest["id"] = SuiteMod;
-            ownManifest["depends"] = new JsonArray(JsonValue.Create("rpg>=1"));
+            ownManifest["depends"] = new JsonArray(JsonValue.Create("rpg>=0.1.0"));
             Check(ModFileService.WriteText(SuiteMod, ManifestFile, ownManifest.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }) + "\n"),
                 "the test mod's manifest depends on rpg only");
             // The window of the game's "Play from here" is gone (window is null); a fresh one opens the test mod's map.
@@ -680,8 +680,8 @@ namespace Cthangover.Tools.RpgEditor.Tests
             Check(window.FindChildren("*", "Label", true, false).OfType<Label>().Any(l => l.Text != null && l.Text.Contains(notice)),
                 "the status line says that village_pack was added to depends");
             var savedManifest = ModFileService.ReadText(SuiteMod, ManifestFile) ?? string.Empty;
-            Check(savedManifest.Contains("\"village_pack>=1\"") && savedManifest.Contains("\"rpg>=1\""),
-                "the manifest gains village_pack>=1 and keeps rpg>=1");
+            Check(savedManifest.Contains("\"village_pack>=0.1.0\"") && savedManifest.Contains("\"rpg>=0.1.0\""),
+                "the manifest gains village_pack>=0.1.0 and keeps rpg>=0.1.0");
         }
 
         /// <summary>Runs a dependency part; a failure first puts the test mod back, so a red run leaves no change behind.</summary>
