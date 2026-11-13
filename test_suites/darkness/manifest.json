@@ -4,8 +4,8 @@
     "src/*.cs"
   ],
   "depends": [
-    "light_editor>=1",
+    "light_editor>=0.1.0",
     "rpg_plus_game>=0.1.0",
-    "village_pack>=1"
+    "village_pack>=0.1.0"
   ]
 }

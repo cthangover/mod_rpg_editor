@@ -6,9 +6,9 @@
   ],
   "depends": [
     "rpg_plus_game>=0.1.0",
-    "rpg_editor>=1",
-    "scenario_editor>=1",
-    "characters_editor>=1",
-    "schema_tools>=1"
+    "rpg_editor>=0.1.0",
+    "scenario_editor>=0.1.0",
+    "characters_editor>=0.1.0",
+    "schema_tools>=0.1.0"
   ]
 }
