@@ -22,11 +22,14 @@ namespace Cthangover.Tools.RpgEditor.Tests.Geometry
     /// </summary>
     public partial class RpgGeometryTestDriver : Node
     {
+        private int readinessToken = int.MinValue;
+        private ulong readinessStarted;
+        private ulong readinessFrame;
         private const string Mod = "rpg_plus_game";
         private const string Map = "zz_geometry_editor_test";
         private const string Placement = Map + "/background";
         private readonly Dictionary<string, string> before = new();
-        private readonly Timer timer = new() { WaitTime = 0.4, Autostart = true };
+        private readonly Timer timer = new() { WaitTime = 0.05, Autostart = true };
         private RpgEditorWindow window;
         private string projection = RpgEditorCanvas.TopDown;
         private string shots;
@@ -62,8 +65,26 @@ namespace Cthangover.Tools.RpgEditor.Tests.Geometry
             catch (Exception ex) { Check(false, ex.ToString()); Finish(); }
         }
 
+        // Deferred UI/scene work must finish before the original assertions run.
+        private bool WaitForReadyFrames(int token, bool ready, double timeoutSeconds = 30)
+        {
+            var now = global::Godot.Time.GetTicksMsec();
+            if (readinessToken != token)
+            {
+                readinessToken = token;
+                readinessStarted = now;
+                readinessFrame = 0;
+            }
+            if (now - readinessStarted > timeoutSeconds * 1000)
+                throw new global::System.TimeoutException($"readiness at step {token}: scene/UI did not become ready");
+            if (!ready) { readinessFrame = 0; return false; }
+            if (readinessFrame == 0) readinessFrame = global::Godot.Engine.GetProcessFrames();
+            return global::Godot.Engine.GetProcessFrames() - readinessFrame >= 2;
+        }
+
         private void Run()
         {
+            if (!WaitForReadyFrames(step, Boot.IsReady && GetTree().CurrentScene != null && !GodotSceneService.IsTransitioning && (step == 0 || window != null && window.Visible && window.Canvas?.Scene != null && window.Canvas.Size.X > 0), 30)) return;
             switch (step)
             {
                 case 0:

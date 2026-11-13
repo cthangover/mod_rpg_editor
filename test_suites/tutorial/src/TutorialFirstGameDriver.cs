@@ -29,6 +29,9 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
     /// </summary>
     public partial class TutorialFirstGameDriver : Node
     {
+        private int readinessToken = int.MinValue;
+        private ulong readinessStarted;
+        private ulong readinessFrame;
         private const string Game = "rpg_plus";
         private const string ModId = "tutorial_first_game";
         private const string ModTitle = "Tutorial first game";
@@ -45,7 +48,6 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
         private int step;
         private int passed;
         private double elapsed;
-        private double next;
         private bool done;
         private string pendingShot;
 
@@ -56,7 +58,8 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
             Name = "TutorialFirstGameDriver";
         }
 
-        /// <summary>One step per 0.35 s; every step checks what the screen shows and what the files hold.</summary>
+        /// <summary>Checks screen/file state after visible editor readiness and two actual frames.</summary>
+        /// <summary>Advances when observable scene/UI readiness has held for two real frames; the watchdog remains active.</summary>
         public override void _Process(double delta)
         {
             if (done)
@@ -74,9 +77,6 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
                 return;
             }
 
-            if (elapsed < next)
-                return;
-            next = elapsed + 0.35;
             try
             {
                 RunStep();
@@ -88,8 +88,26 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
             }
         }
 
+        // Deferred UI/scene work must finish before the original assertions run.
+        private bool WaitForReadyFrames(int token, bool ready, double timeoutSeconds = 30)
+        {
+            var now = global::Godot.Time.GetTicksMsec();
+            if (readinessToken != token)
+            {
+                readinessToken = token;
+                readinessStarted = now;
+                readinessFrame = 0;
+            }
+            if (now - readinessStarted > timeoutSeconds * 1000)
+                throw new global::System.TimeoutException($"readiness at step {token}: scene/UI did not become ready");
+            if (!ready) { readinessFrame = 0; return false; }
+            if (readinessFrame == 0) readinessFrame = global::Godot.Engine.GetProcessFrames();
+            return global::Godot.Engine.GetProcessFrames() - readinessFrame >= 2;
+        }
+
         private void RunStep()
         {
+            if (!WaitForReadyFrames(step, Boot.IsReady && GetTree().CurrentScene != null && (step == 0 || editor != null && editor.IsVisibleInTree()), 30)) return;
             switch (step)
             {
                 case 0:

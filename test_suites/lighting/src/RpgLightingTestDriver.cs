@@ -19,9 +19,12 @@ namespace Cthangover.Tools.RpgEditor.Tests.Lighting
     /// <summary>Drives the real existing light editor, its map target and rendered pixels; restores the fixture even on failure.</summary>
     public partial class RpgLightingTestDriver : Node
     {
+        private int readinessToken = int.MinValue;
+        private ulong readinessStarted;
+        private ulong readinessFrame;
         private const string Mod = "rpg_editor__lighting";
         private const string MapPath = "maps/rpg_lighting_test.json";
-        private readonly Timer timer = new() { WaitTime = 0.4, Autostart = true };
+        private readonly Timer timer = new() { WaitTime = 0.05, Autostart = true };
         private LightEditorWindow window;
         private RpgEditorCanvas canvas;
         private int step;
@@ -50,8 +53,26 @@ namespace Cthangover.Tools.RpgEditor.Tests.Lighting
             if (elapsed > 90) { Check(false, "timeout at " + step); Finish(); return; }
             try { Run(); } catch (Exception ex) { Check(false, ex.ToString()); Finish(); }
         }
+        // Deferred UI/scene work must finish before the original assertions run.
+        private bool WaitForReadyFrames(int token, bool ready, double timeoutSeconds = 30)
+        {
+            var now = global::Godot.Time.GetTicksMsec();
+            if (readinessToken != token)
+            {
+                readinessToken = token;
+                readinessStarted = now;
+                readinessFrame = 0;
+            }
+            if (now - readinessStarted > timeoutSeconds * 1000)
+                throw new global::System.TimeoutException($"readiness at step {token}: scene/UI did not become ready");
+            if (!ready) { readinessFrame = 0; return false; }
+            if (readinessFrame == 0) readinessFrame = global::Godot.Engine.GetProcessFrames();
+            return global::Godot.Engine.GetProcessFrames() - readinessFrame >= 2;
+        }
+
         private void Run()
         {
+            if (!WaitForReadyFrames(step + projection * 100, Boot.IsReady && RpgWorldHost.Current?.View != null && !Cthangover.Core.Scenes.GodotSceneService.IsTransitioning && (step == 0 || window != null && window.Visible && canvas?.Scene != null && canvas.Size.X > 0), 30)) return;
             switch (step)
             {
                 case 0:

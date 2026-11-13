@@ -44,6 +44,9 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
     /// </summary>
     public partial class TutorialPlayDriver : Node
     {
+        private int readinessToken = int.MinValue;
+        private ulong readinessStarted;
+        private ulong readinessFrame;
         private const string Game = "rpg_plus";
         private const string Mod = "tutorial_first_game";
         private const string MapName = "tutorial_map";
@@ -117,15 +120,17 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
         private bool done;
         private bool cleanable;
         private string pendingShot;
+        private Timer driverTimer;
+        private int queuedReadiness;
 
         /// <summary>Creates the driver; <paramref name="shotsDir"/> (may be null) receives a picture of the steps.</summary>
         public TutorialPlayDriver(string shotsDir)
         {
             this.shotsDir = shotsDir;
             Name = "TutorialPlayDriver";
-            var timer = new Timer { WaitTime = 0.15f, Autostart = true };
-            AddChild(timer);
-            timer.Timeout += Tick;
+            driverTimer = new Timer { WaitTime = 0.05, Autostart = true };
+            AddChild(driverTimer);
+            driverTimer.Timeout += Tick;
         }
 
         private static RpgWorldView View => RpgWorldHost.Current?.View;
@@ -147,7 +152,9 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
                 SaveShot(pendingShot);
                 pendingShot = null;
             }
-            elapsed += 0.15;
+            elapsed += driverTimer.WaitTime;
+            // The walking queue retains its original polling period and bounded key holds.
+            driverTimer.WaitTime = step >= 47 ? 0.15 : 0.05;
             if (elapsed > TimeoutSeconds)
             {
                 Fail("timeout at step " + step);
@@ -165,8 +172,26 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
             }
         }
 
+        // Deferred UI/scene work must finish before the original assertions run.
+        private bool WaitForReadyFrames(int token, bool ready, double timeoutSeconds = 30)
+        {
+            var now = global::Godot.Time.GetTicksMsec();
+            if (readinessToken != token)
+            {
+                readinessToken = token;
+                readinessStarted = now;
+                readinessFrame = 0;
+            }
+            if (now - readinessStarted > timeoutSeconds * 1000)
+                throw new global::System.TimeoutException($"readiness at step {token}: scene/UI did not become ready");
+            if (!ready) { readinessFrame = 0; return false; }
+            if (readinessFrame == 0) readinessFrame = global::Godot.Engine.GetProcessFrames();
+            return global::Godot.Engine.GetProcessFrames() - readinessFrame >= 2;
+        }
+
         private void RunStep()
         {
+            if (step != 47 && !WaitForReadyFrames(step, Boot.IsReady && GetTree().CurrentScene != null && !GodotSceneService.IsTransitioning, 60)) return;
             switch (step)
             {
                 case 0:
@@ -576,7 +601,7 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
         private void BuildGame()
         {
             Do(CloseEditors);
-            Settle(3);
+            WaitForWorldFrames();
             Do(() => Check(View.Player.Cell == PlayCell, "Play from here enters the map on the cell clicked (" + PlayCell + "), stands at " + View.Player.Cell));
             Do(() => mantleBefore = Inventory.CheckCount(Mantle));
 
@@ -591,7 +616,7 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
             Do(() => Tap(Key.E));
             Until(() => Inventory.CheckCount(Mantle) > mantleBefore, "E on the chest puts the mantle in the bag", 40);
             Do(() => Check(Inventory.CheckCount(Mantle) == mantleBefore + 1, "E on the chest gives the mantle, count " + Inventory.CheckCount(Mantle)));
-            Settle(3);
+            WaitForWorldFrames();
             Do(() => Shot("09_chest"));
 
             // The villager: round the chest to his right side, face him, talk: his dialog plays its line.
@@ -601,7 +626,7 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
             Step(Key.A, VillagerStand.X, VillagerStand.Y);
             Talk(ElderLine, "the villager");
             Do(() => Check(lineSeen, "the villager's dialog plays its line"));
-            Settle(3);
+            WaitForWorldFrames();
 
             // Lina: east along the row, face her from the cell beside her, talk: her line plays before she joins.
             Step(Key.D, 10, 3);
@@ -627,23 +652,23 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
             // The door last: stepping onto it takes the player to rpg_village.
             Step(Key.D, DoorCell.X, DoorCell.Y);
             Until(() => View?.Map?.ID == Village && !GodotSceneService.IsTransitioning, "stepping on the door takes the player to " + Village, 80);
-            Settle(3);
+            WaitForWorldFrames();
             Do(() => Check(View.Map.ID == Village, "the door changes the map to " + Village));
             Do(() => Shot("09_village"));
 
             // Step 10: the character sheet, the hero's empty body slot, the mantle from the bag.
             Do(() => UiRegistry.Toggle(SheetEntry));
             Until(() => SheetPanel()?.Visible == true, "the toolbar entry sheet opens the character sheet", 20);
-            Settle(2);
+            WaitForWorldFrames();
             Do(() => ClickButton(MemberButton(sheetHero)));
-            Settle(2);
+            WaitForWorldFrames();
             Do(() => Check(SlotButton(Body, "Equip") != null, "the empty body slot offers Equip"));
             Do(() => ClickButton(SlotButton(Body, "Equip")));
-            Settle(2);
+            WaitForWorldFrames();
             Do(() => Check(Picker(Body) != null && PickButton(Mantle) != null, "Equip opens the bag's picker, the mantle is offered"));
             Do(() => Shot("10_picker"));
             Do(() => ClickButton(PickButton(Mantle)));
-            Settle(2);
+            WaitForWorldFrames();
             Do(() => Check(EquipmentService.ItemIn(sheetHero, Body) == Mantle, "the mantle is worn in the body slot"));
             Do(() => Check(Inventory.CheckCount(Mantle) == 0, "the worn mantle left the bag"));
             Do(() => Check(StatsService.Sheet(sheetHero).Get("def") - StatsService.Sheet(sheetHero).GetBase("def") == 3, "the mantle's +3 defence reaches the sheet"));
@@ -730,6 +755,16 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
         }
 
         private void Do(Action action) => script.Enqueue(() => { action(); return true; });
+
+        private void WaitForWorldFrames() => script.Enqueue(WorldFramesReady);
+
+        private bool WorldFramesReady()
+        {
+            if (!WaitForReadyFrames(100000 + queuedReadiness,
+                View?.Map != null && !GodotSceneService.IsTransitioning && !View.Player.IsMoving)) return false;
+            queuedReadiness++;
+            return true;
+        }
 
         private void Settle(int ticks)
         {
