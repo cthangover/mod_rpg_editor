@@ -4,7 +4,10 @@
   "version": "0.1.0",
   "author": "ct",
   "description": "RPG map editor for model v2 (plan 12.4): a palette by shape, the map in the game's own top-down and isometric projections, placements (own and foreign, as patches), strokes, collision, spawn, teleport links, undo and a byte-stable save; encounters when rpg__battles is mounted.",
-  "categories": ["tools", "editor"],
+  "categories": [
+    "tools",
+    "editor"
+  ],
   "sources": [
     "src/**/*.cs"
   ],
@@ -23,7 +26,9 @@
   "test_suites": [
     {
       "id": "geometry",
-      "activate": ["--itest=rpg_editor_geometry"]
+      "activate": [
+        "--itest=rpg_editor_geometry"
+      ]
     },
     {
       "id": "edit",
@@ -71,6 +76,12 @@
       "id": "darkness",
       "activate": [
         "--itest=free_lights"
+      ]
+    },
+    {
+      "id": "catalog",
+      "activate": [
+        "--itest=rpg_editor_catalog"
       ]
     }
   ],

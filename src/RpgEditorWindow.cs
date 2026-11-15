@@ -501,7 +501,7 @@ namespace Cthangover.Tools.RpgEditor
             bar.AddChild(collisionPicker);
             effectPicker = new OptionButton { Name = "EffectProfile", TooltipText = ToolUi.Tr("tools/rpg_editor/effect_profile_tip") };
             effectPicker.ItemSelected += index => effectProfile = effectPicker.GetItemMetadata((int)index).AsString();
-            foreach (var profile in AtmosphereCatalog.Collect().Keys.OrderBy(k => k, StringComparer.Ordinal))
+            foreach (var profile in AtmosphereCatalog.Collect(required: false).Keys.OrderBy(k => k, StringComparer.Ordinal))
             {
                 effectPicker.AddItem(profile);
                 effectPicker.SetItemMetadata(effectPicker.ItemCount - 1, profile);
@@ -510,6 +510,15 @@ namespace Cthangover.Tools.RpgEditor
             {
                 effectPicker.Select(0);
                 effectProfile = effectPicker.GetItemMetadata(0).AsString();
+            }
+            else
+            {
+                effectPicker.AddItem(ToolUi.Tr("tools/rpg_editor/effect_profiles_none"));
+                effectPicker.SetItemDisabled(0, true);
+                effectPicker.Disabled = true;
+                effectPicker.TooltipText = ToolUi.Tr("tools/rpg_editor/effect_profiles_none_tip");
+                toolButtons[RpgEditorTool.Effects].Disabled = true;
+                toolButtons[RpgEditorTool.Effects].TooltipText = effectPicker.TooltipText;
             }
             bar.AddChild(effectPicker);
             bar.AddChild(ToolUi.Divider());
