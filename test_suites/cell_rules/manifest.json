@@ -1,0 +1,5 @@
+{
+  "id": "rpg_editor__cell_rules",
+  "name": "Cell rules and reachability contracts",
+  "test_sources": ["tests/*.cs"]
+}

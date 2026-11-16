@@ -1,0 +1,44 @@
+{
+  "Kind": "rpg_map",
+  "Items": [
+    {
+      "Id": "rules_fixture",
+      "Width": 8,
+      "Height": 8,
+      "TileSize": 32,
+      "Spawn": {
+        "X": 1,
+        "Y": 1
+      },
+      "Collision": [
+        "....#...",
+        "....#...",
+        "....#...",
+        "....o...",
+        "....#...",
+        "....#...",
+        "....#...",
+        "....#..."
+      ],
+      "Events": [
+        {
+          "Id": "near",
+          "X": 3,
+          "Y": 1,
+          "Solid": true,
+          "Trigger": "Use"
+        },
+        {
+          "Id": "remote",
+          "X": 2,
+          "Y": 5,
+          "Teleport": {
+            "Map": "rules_destination",
+            "X": 2,
+            "Y": 2
+          }
+        }
+      ]
+    }
+  ]
+}

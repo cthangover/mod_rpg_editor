@@ -47,6 +47,8 @@ namespace Cthangover.Tools.RpgEditor
 
         internal RpgEditorInspector Inspector { get; private set; }
 
+        internal VBoxContainer Diagnostics { get; private set; }
+
         internal ModFileSelector Selector { get; private set; }
 
         internal OptionButton ProjectionPicker { get; private set; }
@@ -124,6 +126,8 @@ namespace Cthangover.Tools.RpgEditor
             {
                 SizeFlagsVertical = Control.SizeFlags.ExpandFill
             };
+            Diagnostics = new VBoxContainer();
+            right.AddChild(Diagnostics);
             var scroll = new ScrollContainer
             {
                 SizeFlagsVertical = Control.SizeFlags.ExpandFill,
