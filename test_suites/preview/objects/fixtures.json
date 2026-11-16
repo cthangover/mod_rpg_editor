@@ -1,0 +1,72 @@
+{
+  "Kind": "rpg_object",
+  "Items": [
+    {
+      "Id": "preview_fixture/sprite",
+      "Form": "sprite",
+      "Solid": true,
+      "Parts": [
+        {
+          "Id": "body",
+          "Image": "preview_pixels/red",
+          "Size": [
+            1,
+            1
+          ]
+        }
+      ],
+      "Variants": {
+        "winter": {
+          "Parts": [
+            {
+              "Id": "body",
+              "Image": "preview_pixels/blue",
+              "Size": [
+                1,
+                1
+              ]
+            }
+          ]
+        }
+      },
+      "States": [
+        {
+          "Id": "opened",
+          "When": "self.open == 1",
+          "Solid": false,
+          "Parts": [
+            {
+              "Id": "body",
+              "Image": "preview_pixels/blue",
+              "Size": [
+                1,
+                1
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "preview_fixture/actor",
+      "Form": "actor",
+      "Charset": "preview_pixels/sheet",
+      "Facing": "down",
+      "States": [
+        {
+          "Id": "turned",
+          "When": "self.turn == 1",
+          "Charset": "preview_pixels/sheet_alt",
+          "Facing": "up",
+          "Column": 5
+        },
+        {
+          "Id": "absent",
+          "When": "self.absent == 1",
+          "Hidden": true,
+          "Charset": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "rpg_editor__preview",
+  "name": "Detached effective presentation contracts",
+  "test_sources": [
+    "tests/*.cs"
+  ]
+}

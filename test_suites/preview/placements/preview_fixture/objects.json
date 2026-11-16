@@ -1,0 +1,31 @@
+{
+  "Kind": "rpg_placement",
+  "Items": [
+    {
+      "Id": "preview_fixture/left",
+      "Object": "preview_fixture/sprite",
+      "X": 1,
+      "Y": 1,
+      "States$add": [
+        {
+          "Id": "removed",
+          "When": "self.gone == 1",
+          "Hidden": true
+        }
+      ]
+    },
+    {
+      "Id": "preview_fixture/right",
+      "Object": "preview_fixture/sprite",
+      "X": 2,
+      "Y": 1,
+      "Variant": "winter"
+    },
+    {
+      "Id": "preview_fixture/actor",
+      "Object": "preview_fixture/actor",
+      "X": 3,
+      "Y": 1
+    }
+  ]
+}

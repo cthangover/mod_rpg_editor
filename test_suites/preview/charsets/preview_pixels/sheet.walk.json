@@ -1,0 +1,11 @@
+{
+  "Columns": 7,
+  "IdleColumn": 3,
+  "WalkFrames": [
+    0,
+    2,
+    4,
+    6
+  ],
+  "SpeedScale": 1
+}

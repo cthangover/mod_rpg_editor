@@ -1,166 +1,203 @@
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using Cthangover.Core.Mods.Resolvers;
+using Cthangover.Mods.Interface.Base.Lists;
+using Cthangover.Mods.Interface.Theming;
+using Cthangover.Mods.Rpg.Model;
+using Cthangover.Tools.Common;
+using Godot;
+
 namespace Cthangover.Tools.RpgEditor
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Globalization;
-    using System.Runtime.CompilerServices;
-    using System.Text.Json;
-    using System.Text.RegularExpressions;
-    using Cthangover.Core.Mods.Resolvers;
-    using Cthangover.Core.Scenes;
-    using Cthangover.Mods.Interface.Theming;
-    using Cthangover.Mods.Rpg;
-    using Cthangover.Mods.Rpg.Model;
-    using Cthangover.Tools.Common;
-    using Godot;
-
     /// <summary>
-    /// The state preview of a selected placement (plan 14.G11): the <c>self.</c> flags that its object's states and its
-    /// interaction read, as check boxes, and the state that applies to those values. A check box sets the flag to 1 or 0
-    /// for this preview only: the values live in the editor, per map document, and are never saved to a file or written
-    /// into the game's story flags. The state is chosen the way the game chooses it (<see cref="RpgObjectResolve.ActiveState(RpgObject, Func{string, string, bool}, string)"/>),
-    /// with each <c>self.&lt;name&gt;</c> of a condition replaced by its preview value (unset is 0) before
-    /// <see cref="ScenarioCondition.Evaluate(string, string)"/> runs.
-    /// <para>
-    /// The canvas still draws the object's own look; the state switch is shown here. Placement-level <c>States$add</c>
-    /// overrides are not part of the preview (the object's own states are).
-    /// </para>
+    /// Selected placement's detached state inputs, including map/placement variants and added states.
+    /// Changes request a canvas rebuild without document edits, story flags or interaction execution.
+    /// The document-local owner survives inspector rebuilds and isolates different placements.
     /// </summary>
-    public partial class RpgStatePreview : VBoxContainer
+    public partial class RpgStatePreview : ModWidget
     {
         private static readonly Regex SelfToken = new(@"\bself\.([A-Za-z_][A-Za-z0-9_]*)");
-        private static readonly Regex SelfCompare = new(@"\bself\.([A-Za-z_][A-Za-z0-9_]*)\s*(==|!=|<=|>=|<|>)\s*(-?\d+(?:\.\d+)?)");
-
-        private static readonly ConditionalWeakTable<RpgMapDocument, Dictionary<string, Dictionary<string, string>>> Values = new();
-
-        private readonly Label stateLabel;
-        private readonly RpgObject effective;
-        private readonly Dictionary<string, string> values;
         private readonly string placementId;
-
-        /// <summary>Builds the preview of <paramref name="placementId"/> placed as <paramref name="objectId"/> on <paramref name="document"/>.</summary>
+        private readonly RpgEditorPreview preview;
+        private readonly RpgObject effective;
+        private readonly Dictionary<string, CheckBox> boxes = new(StringComparer.Ordinal);
+        private Label stateLabel;
+        private VBoxContainer content;
+        /// <summary>Requests presentation refresh only; the host must preserve this inspector while rebuilding the canvas.</summary>
+        public event Action Changed;
+        /// <summary>Reads the document's actual placement overrides and map variant before creating any controls.</summary>
         public RpgStatePreview(RpgMapDocument document, string placementId, string objectId)
         {
             this.placementId = placementId;
+            preview = RpgEditorPreview.ForDocument(document);
             Name = "StatePreview";
-            var store = Values.GetValue(document, _ => new Dictionary<string, Dictionary<string, string>>());
-            if (!store.TryGetValue(placementId, out values))
-            {
-                values = new Dictionary<string, string>();
-                store[placementId] = values;
-            }
+            SizeFlagsHorizontal = SizeFlags.ExpandFill;
             RpgObject resolved = null;
             if (objectId != null)
+            {
                 Entities.Collect<RpgObject>().TryGetValue(objectId, out resolved);
-            effective = resolved == null ? null : RpgObjectResolve.Effective(resolved, null, null);
+            }
 
-            AddChild(ToolUi.Section("tools/rpg_editor/preview_title"));
-            AddChild(ToolUi.Hint(ToolUi.Tr("tools/rpg_editor/preview_hint")));
+            RpgPlacement placement = null;
+            foreach (var record in document.Placements)
+            {
+                if (record.Id == placementId)
+                {
+                    placement = RpgEditorScene.PlacementOf(record.Data);
+                    break;
+                }
+            }
+
+            effective = RpgObjectResolve.Effective(resolved, RpgEditorScene.MapOf(document.Data).Variant, placement);
+        }
+
+        /// <summary>Localized chosen-state text for the same effective object and detached values as the canvas.</summary>
+        public string StateText
+        {
+            get
+            {
+                EnsureConstructed();
+                return stateLabel.Text;
+            }
+        }
+
+        /// <summary>Completes utility construction after native attachment; repeated access uses the same controls.</summary>
+        public override void _Ready()
+        {
+            EnsureConstructed();
+        }
+
+        protected override void Construct()
+        {
+            content = new VBoxContainer();
+            AddChild(content);
+            content.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+            content.AddChild(ToolUi.Section("tools/rpg_editor/preview_title"));
+            content.AddChild(ToolUi.Hint(ToolUi.Tr("tools/rpg_editor/preview_hint")));
             stateLabel = ToolUi.Hint(string.Empty);
             stateLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-            AddChild(stateLabel);
-
+            content.AddChild(stateLabel);
             var names = SelfNames(effective);
             if (names.Count == 0)
-                AddChild(ToolUi.Hint(ToolUi.Tr("tools/rpg_editor/preview_no_flags")));
+            {
+                content.AddChild(ToolUi.Hint(ToolUi.Tr("tools/rpg_editor/preview_no_flags")));
+            }
+
             foreach (var name in names)
             {
-                var box = new CheckBox { Name = "Preview_" + name, Text = ScenarioCondition.SelfPrefix + "." + name, ButtonPressed = Value(name) == "1" };
-                var flag = name;
-                box.Toggled += on =>
+                var box = new CheckBox
                 {
-                    values[flag] = on ? "1" : "0";
-                    Refresh();
+                    Name = "Preview_" + name,
+                    Text = "self." + name,
+                    ButtonPressed = preview.IsSet(placementId, name),
                 };
-                AddChild(box);
+                boxes[name] = box;
+                box.Toggled += OnToggled;
+                content.AddChild(box);
             }
+
             if (names.Count > 0)
             {
-                AddChild(ToolUi.Button("tools/rpg_editor/preview_reset", Reset, ButtonKind.Secondary, "tools/rpg_editor/preview_reset_tip"));
+                content.AddChild(ToolUi.Button("tools/rpg_editor/preview_reset", Reset, ButtonKind.Secondary,
+                    "tools/rpg_editor/preview_reset_tip"));
             }
+
+            content.MinimumSizeChanged += UpdateMinimum;
+            UpdateMinimum();
             Refresh();
         }
 
-        /// <summary>The text the preview shows as the state that applies (read by the window's tests).</summary>
-        public string StateText => stateLabel?.Text ?? string.Empty;
+        private void OnToggled(bool enabled)
+        {
+            foreach (var pair in boxes)
+            {
+                preview.Set(placementId, pair.Key, pair.Value.ButtonPressed);
+            }
 
-        /// <summary>The preview value of a flag of this placement (unset reads as 0).</summary>
-        private string Value(string name) => values.TryGetValue(name, out var value) ? value : "0";
+            Refresh();
+            Changed?.Invoke();
+        }
 
-        /// <summary>Sets every preview flag of the placement back to 0 and shows the base state again.</summary>
         private void Reset()
         {
-            values.Clear();
-            foreach (var child in GetChildren())
+            preview.Reset(placementId);
+            foreach (var box in boxes.Values)
             {
-                if (child is CheckBox box)
-                    box.SetPressedNoSignal(false);
+                box.SetPressedNoSignal(false);
             }
+
             Refresh();
+            Changed?.Invoke();
         }
 
-        /// <summary>Re-chooses the active state from the preview values and shows it.</summary>
         private void Refresh()
         {
-            if (stateLabel == null)
-                return;
             if (effective == null)
             {
                 stateLabel.Text = ToolUi.Tr("tools/rpg_editor/preview_no_object");
                 return;
             }
-            var index = RpgObjectResolve.ActiveState(effective, (when, scope) => Holds(when), placementId);
+
+            var index = preview.StateIndex(effective, placementId);
             stateLabel.Text = index >= 0 && effective.States[index]?.Id is { } id
                 ? string.Format(ToolUi.Tr("tools/rpg_editor/preview_state"), id)
                 : ToolUi.Tr("tools/rpg_editor/preview_base");
         }
 
-        /// <summary>Evaluates a state condition with the placement's preview values in place of its <c>self.</c> names.</summary>
-        private bool Holds(string when)
+        private void UpdateMinimum()
         {
-            // The condition parser takes a flag on the left of a comparison, not a number: each self. comparison is decided
-            // here, and the rest (a bare self. name) becomes a boolean literal before the game's parser runs.
-            var text = SelfCompare.Replace(when, match => Compare(Value(match.Groups[1].Value), match.Groups[2].Value, match.Groups[3].Value) ? "true" : "false");
-            text = SelfToken.Replace(text, match => Truthy(Value(match.Groups[1].Value)) ? "true" : "false");
-            return ScenarioCondition.Evaluate(text, null);
-        }
-
-        /// <summary>Compares a preview value with a number of the condition (invariant culture); text values compare as text for == and !=.</summary>
-        private static bool Compare(string value, string op, string literal)
-        {
-            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var left)
-                && double.TryParse(literal, NumberStyles.Float, CultureInfo.InvariantCulture, out var right))
+            var minimum = content.GetCombinedMinimumSize();
+            if (CustomMinimumSize != minimum)
             {
-                return op switch
-                {
-                    "==" => left == right,
-                    "!=" => left != right,
-                    "<" => left < right,
-                    ">" => left > right,
-                    "<=" => left <= right,
-                    _ => left >= right,
-                };
+                CustomMinimumSize = minimum;
             }
-            return op == "==" ? value == literal : op == "!=" && value != literal;
         }
 
-        /// <summary>A bare <c>self.</c> name holds when its preview value is set and not 0.</summary>
-        private static bool Truthy(string value) => !string.IsNullOrEmpty(value) && value != "0";
+        protected override void Destruct()
+        {
+            content.MinimumSizeChanged -= UpdateMinimum;
+            foreach (var box in boxes.Values)
+            {
+                box.Toggled -= OnToggled;
+            }
 
-        /// <summary>
-        /// The command lines of a state's own <c>Interact</c>. A state keeps its components as JSON (<see cref="RpgObjectState.Components"/>),
-        /// so the commands are read from the <c>Interact</c> entry; a state without one gives nothing.
-        /// </summary>
+            Changed = null;
+            base.Destruct();
+        }
+
         private static IEnumerable<string> StateCommands(RpgObjectState state)
         {
-            if (state?.Components == null || !state.Components.TryGetValue("Interact", out var interact) || interact.ValueKind != JsonValueKind.Object)
-                yield break;
-            if (!interact.TryGetProperty("Commands", out var commands) || commands.ValueKind != JsonValueKind.Array)
-                yield break;
-            foreach (var command in commands.EnumerateArray())
+            if (state?.Components == null)
             {
-                if (command.ValueKind == JsonValueKind.String && command.GetString() is { } text)
-                    yield return text;
+                yield break;
+            }
+
+            foreach (var pair in state.Components)
+            {
+                if (!pair.Key.Equals("Interact", StringComparison.OrdinalIgnoreCase)
+                    || pair.Value.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                foreach (var property in pair.Value.EnumerateObject())
+                {
+                    if (!property.Name.Equals("Commands", StringComparison.OrdinalIgnoreCase)
+                        || property.Value.ValueKind != JsonValueKind.Array)
+                    {
+                        continue;
+                    }
+
+                    foreach (var command in property.Value.EnumerateArray())
+                    {
+                        if (command.ValueKind == JsonValueKind.String && command.GetString() is { } text)
+                        {
+                            yield return text;
+                        }
+                    }
+                }
             }
         }
 
@@ -169,30 +206,46 @@ namespace Cthangover.Tools.RpgEditor
         {
             var result = new List<string>();
             if (obj == null)
+            {
                 return result;
+            }
+
             var texts = new List<string>();
             if (obj.Interact?.Commands != null)
+            {
                 texts.AddRange(obj.Interact.Commands);
+            }
+
             if (obj.States != null)
             {
                 foreach (var state in obj.States)
                 {
                     if (!string.IsNullOrEmpty(state?.When))
+                    {
                         texts.Add(state.When);
+                    }
+
                     texts.AddRange(StateCommands(state));
                 }
             }
+
             foreach (var text in texts)
             {
                 if (string.IsNullOrEmpty(text))
+                {
                     continue;
+                }
+
                 foreach (Match match in SelfToken.Matches(text))
                 {
                     var name = match.Groups[1].Value;
                     if (!result.Contains(name))
+                    {
                         result.Add(name);
+                    }
                 }
             }
+
             return result;
         }
     }

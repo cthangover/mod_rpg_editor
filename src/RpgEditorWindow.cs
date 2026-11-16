@@ -75,6 +75,8 @@ namespace Cthangover.Tools.RpgEditor
 
         private readonly RpgEditorThumbnails thumbnails = new();
 
+        private RpgStatePreview statePreview;
+
         private readonly RpgRenderSceneBuilder builder;
 
         private readonly ButtonGroup toolGroup = new();
@@ -587,6 +589,7 @@ namespace Cthangover.Tools.RpgEditor
         {
             ModEventBus.Unsubscribe<EntitiesSavedEvent>(OnEntitiesSaved);
             toolGroup.Pressed -= OnToolButtonPressed;
+            DetachStatePreview();
             canvas?.Clear();
             if (canvas != null)
             {
@@ -1525,12 +1528,17 @@ namespace Cthangover.Tools.RpgEditor
                 return;
             }
 
-            scene = RpgEditorScene.From(document, ObjectOf);
+            scene = RpgEditorScene.From(document, ObjectOf, RpgEditorPreview.ForDocument(document).Resolve);
             textures.BeginScene();
             var tileScene = builder.Build(scene.Map, scene.Cells, scene.Statics);
             canvas.Actors.Clear();
             foreach (var actor in scene.Actors)
             {
+                if (actor.Object.Hidden)
+                {
+                    continue;
+                }
+
                 var look = builder.ActorLook(actor.Object, tileScene.TileSize);
                 if (look == null)
                 {
@@ -1542,8 +1550,9 @@ namespace Cthangover.Tools.RpgEditor
                     Id = actor.Id,
                     Visible = true,
                     Charset = true,
-                    Facing = 1,
-                    Column = TileWalkSheet.Animation(look.Texture).IdleColumn,
+                    Facing = (int)actor.Object.Facing,
+                    Column = actor.Object.Column == TileWalkSheet.IdleColumn
+                        ? TileWalkSheet.Animation(look.Texture).IdleColumn : actor.Object.Column,
                     Position = new Vector2(actor.X, actor.Y),
                     Look = look,
                     Tint = Colors.White,
@@ -1697,6 +1706,7 @@ namespace Cthangover.Tools.RpgEditor
 
         private void RefreshInspector()
         {
+            DetachStatePreview();
             routePreview = null;
             routeDrawing = null;
             if (inspector == null)
@@ -1755,8 +1765,29 @@ namespace Cthangover.Tools.RpgEditor
                 ObjectInteract = selectedObject == null ? null : ObjectOf(selectedObject)?.Interact,
                 Variants = VariantNames(),
             });
+            statePreview = inspector.FindChild("StatePreview", true, false) as RpgStatePreview;
+            if (statePreview != null)
+            {
+                statePreview.EnsureConstructed();
+                statePreview.Changed += OnStatePreviewChanged;
+            }
+
             UpdateRouteOverlay();
             canvas.Refresh();
+        }
+
+        private void OnStatePreviewChanged()
+        {
+            RebuildScene(false);
+        }
+
+        private void DetachStatePreview()
+        {
+            if (statePreview != null)
+            {
+                statePreview.Changed -= OnStatePreviewChanged;
+                statePreview = null;
+            }
         }
 
         private void UpdateButtons()
