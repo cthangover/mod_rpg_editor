@@ -2,5 +2,8 @@
   "name": "Map context-link contracts",
   "test_sources": [
     "tests/*.cs"
+  ],
+  "depends": [
+    "village_pack>=0.1.0"
   ]
 }

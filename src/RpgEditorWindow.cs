@@ -71,6 +71,8 @@ namespace Cthangover.Tools.RpgEditor
 
         private static readonly Color GhostBlocked = new(1f, 0.3f, 0.3f, 0.7f);
 
+        private readonly List<RpgEditorToolBinding> toolBindings = new();
+
         private readonly RpgEditorTextures textures = new();
 
         private readonly RpgEditorThumbnails thumbnails = new();
@@ -592,7 +594,12 @@ namespace Cthangover.Tools.RpgEditor
         protected override void Cleanup()
         {
             ModEventBus.Unsubscribe<EntitiesSavedEvent>(OnEntitiesSaved);
-            toolGroup.Pressed -= OnToolButtonPressed;
+            foreach (var binding in toolBindings)
+            {
+                binding.Dispose();
+            }
+
+            toolBindings.Clear();
             DetachStatePreview();
             ReleaseStamps();
             ReleaseContext();
@@ -654,8 +661,8 @@ namespace Cthangover.Tools.RpgEditor
                 foreach (var pair in view.ToolButtons)
                 {
                     toolButtons[pair.Key] = pair.Value;
+                    toolBindings.Add(new RpgEditorToolBinding(this, pair.Value, pair.Key));
                 }
-                toolGroup.Pressed += OnToolButtonPressed;
                 palette.ObjectChosen += OnObjectChosen;
                 palette.CharacterChosen += OnCharacterChosen;
                 canvas.CellPressed += OnCellPressed;
@@ -1924,18 +1931,6 @@ namespace Cthangover.Tools.RpgEditor
         internal static PanelContainer Sidebar(VBoxContainer content, int width)
         {
             return CreateSidebar(content, width);
-        }
-
-        private void OnToolButtonPressed(BaseButton button)
-        {
-            foreach (var pair in toolButtons)
-            {
-                if (pair.Value == button)
-                {
-                    SelectTool(pair.Key);
-                    return;
-                }
-            }
         }
 
         private void OnDeleteRequested(string id)

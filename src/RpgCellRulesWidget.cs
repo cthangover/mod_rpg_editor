@@ -48,17 +48,17 @@ namespace Cthangover.Tools.RpgEditor
             enabled = new CheckButton
             {
                 Name = "CellRulesEnabled",
-                Text = Tr("toggle"),
-                TooltipText = Tr("tip"),
+                Text = ToolUi.Tr("tools/rpg_editor/rules_toggle"),
+                TooltipText = ToolUi.Tr("tools/rpg_editor/rules_tip"),
             };
             enabled.Toggled += OnEnabled;
             row.AddChild(enabled);
             check = new Button
             {
                 Name = "CellRulesCheck",
-                Text = Tr("check"),
+                Text = ToolUi.Tr("tools/rpg_editor/rules_check"),
                 Disabled = true,
-                TooltipText = Tr("check_tip"),
+                TooltipText = ToolUi.Tr("tools/rpg_editor/rules_check_tip"),
             };
             check.Pressed += OnCheck;
             row.AddChild(check);
@@ -85,9 +85,34 @@ namespace Cthangover.Tools.RpgEditor
             };
         }
 
-        private static string Tr(string name)
+        private static string ReasonText(string rule)
         {
-            return ToolUi.Tr("tools/rpg_editor/rules_" + name);
+            return rule switch
+            {
+                "outside" => ToolUi.Tr("tools/rpg_editor/rules_reason_outside"),
+                "block" => ToolUi.Tr("tools/rpg_editor/rules_reason_block"),
+                "open" => ToolUi.Tr("tools/rpg_editor/rules_reason_open"),
+                "placement" => ToolUi.Tr("tools/rpg_editor/rules_reason_placement"),
+                "structure" => ToolUi.Tr("tools/rpg_editor/rules_reason_structure"),
+                "ground" => ToolUi.Tr("tools/rpg_editor/rules_reason_ground"),
+                "free" => ToolUi.Tr("tools/rpg_editor/rules_reason_free"),
+                _ => throw new ArgumentOutOfRangeException(nameof(rule), rule, "Unknown cell rule."),
+            };
+        }
+
+        private static string IssueText(string code)
+        {
+            return code switch
+            {
+                "budget" => ToolUi.Tr("tools/rpg_editor/rules_issue_budget"),
+                "spawn" => ToolUi.Tr("tools/rpg_editor/rules_issue_spawn"),
+                "event" => ToolUi.Tr("tools/rpg_editor/rules_issue_event"),
+                "target" => ToolUi.Tr("tools/rpg_editor/rules_issue_target"),
+                "arrival" => ToolUi.Tr("tools/rpg_editor/rules_issue_arrival"),
+                "route" => ToolUi.Tr("tools/rpg_editor/rules_issue_route"),
+                "route_dynamic" => ToolUi.Tr("tools/rpg_editor/rules_issue_route_dynamic"),
+                _ => throw new ArgumentOutOfRangeException(nameof(code), code, "Unknown map diagnostic."),
+            };
         }
 
         /// <summary>The checkbox alone determines whether per-frame scene invalidation is observed.</summary>
@@ -145,15 +170,19 @@ namespace Cthangover.Tools.RpgEditor
             var at = cell ?? new Vector2I(scene?.Map.Spawn?.X ?? 0, scene?.Map.Spawn?.Y ?? 0);
             var report = RpgCellReport.At(scene, at);
             var text = new StringBuilder();
-            text.AppendLine(string.Format(Tr("cell"), at.X, at.Y, Tr(report.Walkable ? "walkable" : "blocked")));
-            text.AppendLine(Tr("reason_" + report.Rule));
+            var walkability = report.Walkable
+                ? ToolUi.Tr("tools/rpg_editor/rules_walkable")
+                : ToolUi.Tr("tools/rpg_editor/rules_blocked");
+            text.AppendLine(string.Format(ToolUi.Tr("tools/rpg_editor/rules_cell"), at.X, at.Y, walkability));
+            text.AppendLine(ReasonText(report.Rule));
             var document = host.Document;
             if (document?.Map != null)
             {
-                text.AppendLine(string.Format(Tr("source"), document.Map.OwnerMod ?? document.OwnMod, document.Map.File));
+                var owner = document.Map.OwnerMod ?? document.OwnMod;
+                text.AppendLine(string.Format(ToolUi.Tr("tools/rpg_editor/rules_source"), owner, document.Map.File));
                 if (document.IsForeign)
                 {
-                    text.AppendLine(string.Format(Tr("patch"), document.OwnMod));
+                    text.AppendLine(string.Format(ToolUi.Tr("tools/rpg_editor/rules_patch"), document.OwnMod));
                 }
             }
 
@@ -162,11 +191,14 @@ namespace Cthangover.Tools.RpgEditor
                 text.AppendLine("Collision " + report.Collision + " ← " + report.CollisionSource);
                 text.AppendLine("Ground " + (report.Ground ?? "∅") + " ← " + report.GroundSource);
                 text.AppendLine("Structure " + (report.Structure ?? "∅") + " ← " + report.StructureSource);
-                text.AppendLine(string.Format(Tr("masks"), string.Join(", ", report.Blockers)));
+                text.AppendLine(string.Format(ToolUi.Tr("tools/rpg_editor/rules_masks"), string.Join(", ", report.Blockers)));
                 if (audit != null)
                 {
                     var path = audit.PathTo(at);
-                    text.AppendLine(path == null ? Tr("no_path") : string.Format(Tr("path"), path.Count - 1));
+                    var description = path == null
+                        ? ToolUi.Tr("tools/rpg_editor/rules_no_path")
+                        : string.Format(ToolUi.Tr("tools/rpg_editor/rules_path"), path.Count - 1);
+                    text.AppendLine(description);
                 }
             }
 
@@ -178,11 +210,13 @@ namespace Cthangover.Tools.RpgEditor
             source = host.Scene;
             audit = host.DiagnoseMap();
             var text = new StringBuilder();
-            text.AppendLine(string.Format(Tr("summary"), audit.Reached, audit.Issues.Count));
-            text.AppendLine(Tr("snapshot"));
+            text.AppendLine(string.Format(ToolUi.Tr("tools/rpg_editor/rules_summary"), audit.Reached, audit.Issues.Count));
+            text.AppendLine(ToolUi.Tr("tools/rpg_editor/rules_snapshot"));
             foreach (var issue in audit.Issues)
             {
-                text.AppendLine(string.Format(Tr("issue"), Tr("issue_" + issue.Code), issue.Id, issue.Cell.X, issue.Cell.Y));
+                var description = string.Format(ToolUi.Tr("tools/rpg_editor/rules_issue"),
+                    IssueText(issue.Code), issue.Id, issue.Cell.X, issue.Cell.Y);
+                text.AppendLine(description);
             }
 
             results.Text = text.ToString();
