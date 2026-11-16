@@ -99,6 +99,108 @@ To place a sprite, choose it in the **Sprites** tab, select **Place** and click 
 
 ![Placing a sprite: the Sprites tab with a barrel chosen and the Place tool active; the ghost of the barrel sits on the cell under the pointer.](assets/rpg-editor-place.jpg)
 
+## Palette: find an object and see it on the map
+
+Choose **Surfaces**, **Segments**, **Sprites**, **Actors** or **Characters** on the left. Search filters rows by name or id. Use the arrows beside the tab names when they do not all fit. Search text and the selected object survive switching tabs.
+
+The palette loads small thumbnails for the active tab. Full map pictures load separately: an icon's size does not reduce the object's quality on the canvas or change its source file. Opening a tab with large sprites for the first time can take a moment. If some thumbnails are omitted because of the memory limit, their objects remain selectable by name.
+
+![Sprite palette: search, a selected thumbnail row and the same object on the canvas.](assets/iso2d-palette-en.png)
+
+## Brush, fill and rectangle
+
+Choose a surface or segment and select **Paint**. A **Painting** row appears below the main toolbar. The same row is available for **Collision**.
+
+| Mode | How to use it |
+|---|---|
+| **Brush** | Press and drag to include the cells the pointer crosses. This is the default. |
+| **Fill** | Press inside an area. It selects side-connected cells with the same surface, segment or collision code. Release to apply. Diagonal contact alone does not connect areas. |
+| **Rectangle** | Press at one corner and drag to the other. Both corner cells are included, in either direction. The area clips to the map bounds and can cross different surfaces. |
+
+The gesture is previewed before release; release commits it. **Ctrl+Z** undoes the entire gesture in one step and **Ctrl+Y** redoes it. Moving the pointer into another area after pressing does not expand a fill into that area.
+
+**LMB** applies the chosen surface, segment or collision code. **RMB** clears ground/structure; in Collision it writes the explicit **o** opening. To restore the objects' normal passage rules, choose **As objects / .** and apply it with LMB.
+
+A surface fill follows the authored layer: an NPC or solid event standing on it does not split the area. Collision codes `.`, `#` and `o` form separate fill areas. One operation supports up to **16,384 cells**, including an entire 128×128 map. If the connected area or rectangle is larger, the editor reports the limit and applies nothing. Use a smaller rectangle or brush part of the area. **Effects** retains the ordinary brush.
+
+![Fill selects one connected area and leaves the neighbouring surface outside the selection.](assets/iso2d-fill-en.png)
+
+![A rectangle crosses two surfaces; the mode and preview bounds are visible before release.](assets/iso2d-rectangle-en.png)
+
+## Preview a state without running its scenario
+
+1. Use **Select** to choose a placement with states, such as a chest.
+2. Find **State preview** in the inspector and tick the relevant `self.*` flag.
+3. Compare the canvas picture and passage mask. The caption names the applied state. Use **Clear preview flags** to return to the unconfigured preview.
+
+When a state changes solidity or its mask, passage changes too; an ordinary open chest can remain an obstacle. The preview includes the map variant, placement overrides and placement-added states. When several states match, the last one wins by the ordinary game rule. Each placement has its own `self.*` values.
+
+Preview check boxes grant no rewards, run no commands, change no live game flags and add no undo step. Their values belong to the open document and are not saved in files. Conditions requiring live quests or global game state are not played here. **Variant** in the map properties is an ordinary document edit and is saved with the map.
+
+![One chest in its base state.](assets/iso2d-state-base-en.png)
+
+![The same chest after a local preview flag is enabled: the open picture and applied-state caption are visible.](assets/iso2d-state-active-en.png)
+
+## Check feet, depth and passage around an object
+
+Select a visible object or individual event and enable **Geometry and walk-around** above the canvas. The editor shows the footprint, blocked cells, picture bounds, image anchor and sort point. The explanatory line identifies the colours.
+
+Use **Step figure** to move the diagnostic figure one cell, or **Walk around** for continuous playback. Watch its feet: the object should appear in front on one side and behind on the other. **Restart** returns to the beginning; **Stop** halts playback.
+
+The route follows neighbouring cells around the object's bounding rectangle. It does not find a route around an arbitrary contour: a blocked or off-map next cell stops the figure before that cell. The caption distinguishes a complete loop from an interrupted one. For a whole-room backdrop with separate desk events, select the desk event to examine the local obstacle rather than the whole background's bounds.
+
+The figure changes only the editor presentation. It does not move the player, run interactions or edit the map. Changing selection or projection resets the probe.
+
+![The diagnostic figure stands in front of the selected obstacle; its feet and the image anchor are visible.](assets/iso2d-depth-front-en.png)
+
+![The same figure on the other side of the same obstacle: depth changes its drawing order.](assets/iso2d-depth-behind-en.png)
+
+## Understand why a cell is blocked
+
+Enable **Cell rules** on the right and hover a map cell. The panel retains the last inspected cell; before the first hover it uses the map spawn. It shows the final passage decision, collision code, ground, structure and object/event masks covering that cell.
+
+An explicit **#** blocks the cell and **o** deliberately opens it over object masks. **.** leaves the decision to the objects. An open cell can therefore still list suppressed blocking masks. A layer source identifies a map row or the last applicable stroke; it is not the complete history of upstream patches.
+
+Press **Check map** to inspect reachability from spawn, interaction access, arrival cells and constant route segments. A **Step** event needs a reachable cell inside its area; **Use** needs an accessible interaction side. For a route depending on randomness or gameplay, only its preceding constant segment is checked. Hovering after a check reports the length of a confirmed path from spawn.
+
+Results describe the current preview. The check does not run commands, quest conditions or crowd movement and does not itself block saving. An incomplete-check or unavailable-destination message means that result is unconfirmed. The calculation is limited to 16,384 cells; a larger map is not silently treated as fully checked after a partial pass.
+
+![Cell rules: the o override opens the chosen cell over masks; reachability results are shown below.](assets/iso2d-cell-rules-en.png)
+
+## Save a group as a stamp
+
+A stamp reuses **placements and map-owned events**. Ground and structure layer cells are not group members; use brush, fill or rectangle for those layers.
+
+1. Use **Select** to box-select objects; **Ctrl+A** selects all placements and events on the map.
+2. Expand **Stamps** on the right. Enter 1–64 ASCII letters, digits, `_` or `-`, starting with a letter or digit, and press **Save group**. A group can contain up to 256 members.
+3. Select the saved group. The panel names its source file, source map, member count, destination mod and required objects.
+4. Switch to **Select** and click the destination map cell. Then press **Place at pointer cell**. When the pointer has moved from the canvas to the button, the last clicked cell is used. The group's top-left lands there and its relative offsets are preserved.
+5. **Ctrl+Z** removes the entire placed group in one step. Use **Save** to write the instances to the map.
+
+**Save group** immediately writes a separate `editor_stamps/<name>.json` file in the selected mod; it does not save the map. Groups remain available after closing and reopening the editor. An existing name is not overwritten: choose another name. Ordinary **Ctrl+C / Ctrl+V** remains independent.
+
+Each placement creates fresh event and placement identities. Their `self.*` flags and explicit internal member-flag references are bound to that instance. External scenarios and object definitions remain shared references; their contents are not copied. Two stamp instances therefore do not share local event state, while an external shared scenario remains shared.
+
+The library lists groups from the selected mod and its loaded dependencies. If a required object is missing, placement is disabled and the panel names it. A malformed group file does not hide valid neighbouring groups. A group that does not fit the map is refused as a whole. As with ordinary paste, instances can be placed only on an own map; visible foreign members can still be captured without changing their source files.
+
+![Stamp library: group name, source and destination, with one placed instance selected on the map.](assets/iso2d-stamps-en.png)
+
+## Open the related object, character or scenario
+
+**Object ↗**, **Character ↗** and **Scenario ↗** appear on the right. They follow the selected placement or palette object. Hover a button before opening it: its tooltip identifies the source and the future save destination.
+
+- **Object ↗** opens the object definition in a separate editor. An own object keeps its file; a dependency object is edited as a patch in your map's mod.
+- **Character ↗** opens the character definition associated with an actor generated from it. An ordinary actor may have no such association.
+- **Scenario ↗** opens the named scenario source for editing. The tooltip identifies that actual file: the link neither creates a copy in the map's mod nor plays it.
+
+The map retains its unsaved data and undo history in its own window. Opening a link saves nothing. If the required editor is not loaded or there is no target, the disabled button explains why. A foreign object must belong to the selected mod's dependencies; its link does not edit the owner directly.
+
+Use **‹** and **›** at the toolbar edges to reach controls hidden by the window width. Scrolling preserves the current tool and selection.
+
+![The Object tooltip identifies the source definition and the own-mod patch destination.](assets/iso2d-context-en.png)
+
+For playing a completed map, including left-click walking, see [RPG World](../../rpg/docs/en.md).
+
 ## The inspector
 
 - **Placement** — the object's name and id, and where the placement comes from. Its own placements show *This map's own placement*. A placement from another mod shows that mod's name: your edits are then written as a patch in your mod, and the other mod's file stays as it is. You can change **Cell X** and **Cell Y**, **Remove** it, or **Reset** your mod's patch so the game sees the owner's placement again.
@@ -107,7 +209,7 @@ To place a sprite, choose it in the **Sprites** tab, select **Place** and click 
 - **Teleport links** — where this map's teleports lead and which teleports lead here. On the map, a blue arrow runs from a door to its target cell on this map, or leaves towards the name of the other map; a green arrow comes in from another map; a red arrow means a broken target. The list shows the same links (→ leads out, ← leads in). Click a link to open the target map. A red mark means the target is broken: no such map, a cell off the map, or a blocked cell. Drag the arrowhead of a blue arrow to a cell of this map to move its target, or drag a green arrow to move the cell where the player arrives on this map.
 - **Encounters** — shown only when the random battle integration (`rpg__battles`) is in the game. **Steps per battle** is the average number of steps between battles (0 turns them off). **Enemy groups** takes one group per line, enemies separated by commas; **Apply encounters** writes them.
 - **Add an enemy group...** (in the same section) adds a line with that enemy as a group of its own; edit the line to put several enemies in one group.
-- **State preview** — for a placement whose object has states or an interaction with `self.` flags, the inspector lists those flags as check boxes. Ticking a flag shows the state that applies to it, chosen by the game's own rule. It is a preview only: the values are kept while the window is open, nothing is saved and the game's flags do not change. The canvas still draws the object's own look: the sprite does not switch with the state.
+- **State preview** changes the canvas picture and passage mask using local flags, variants and placement overrides. See “Preview a state without running its scenario” above.
 
 ![The village map of rpg_plus_game: the inspector lists its teleport links, outgoing (→, with the target map and cell) and incoming (←).](assets/rpg-editor-village.jpg)
 
@@ -124,7 +226,7 @@ To place a sprite, choose it in the **Sprites** tab, select **Place** and click 
 
 ## Deferred
 
-Map/placement renaming with reference updates, opening a selected placed object in its editor, and forms for placement-specific states/variants are still deferred. Rectangle selection, copy/paste, effect masks and placement interaction pickers are available.
+Map/placement renaming with reference updates and dedicated placement-state/variant editing forms remain deferred. Existing-state preview, context links, box selection, copy/paste, stamps and effect masks are available.
 
 ## If something goes wrong
 
