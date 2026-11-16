@@ -105,6 +105,24 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
             return global::Godot.Engine.GetProcessFrames() - readinessFrame >= 2;
         }
 
+        // Category completion and primary-category choices are owned by the nested category editor.
+        // The tutorial validates the wizard's base and game selectors independently of those controls.
+        private static bool IsWizardPicker(OptionButton picker)
+        {
+            var parent = picker.GetParent();
+            while (parent != null)
+            {
+                if (parent is ModCategoryEditor)
+                {
+                    return false;
+                }
+
+                parent = parent.GetParent();
+            }
+
+            return true;
+        }
+
         private void RunStep()
         {
             if (!WaitForReadyFrames(step, Boot.IsReady && GetTree().CurrentScene != null && (step == 0 || editor != null && editor.IsVisibleInTree()), 30)) return;
@@ -139,7 +157,8 @@ namespace Cthangover.Tools.RpgEditor.Tutorial
                     Check(edits.Count >= 2, "the wizard asks for a title and an id");
                     Type(edits[0], ModTitle);
                     Check(edits[1].Text == ModId, $"the id follows the title ({edits[1].Text})");
-                    var pickers = form.FindChildren("*", "", true, false).OfType<OptionButton>().ToList();
+                    var pickers = form.FindChildren("*", "", true, false).OfType<OptionButton>()
+                        .Where(IsWizardPicker).ToList();
                     Check(pickers.Count == 2, "the wizard has a base and a game to pick");
                     if (pickers.Count == 2)
                     {
