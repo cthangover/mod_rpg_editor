@@ -1,0 +1,8 @@
+{
+  "id": "rpg_editor__palette",
+  "name": "Editor image ownership and palette contracts",
+  "version": "0.1.0",
+  "test_sources": [
+    "tests/*.cs"
+  ]
+}

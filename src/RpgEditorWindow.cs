@@ -1,57 +1,31 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.Json.Nodes;
+using Cthangover.Core.Events;
+using Cthangover.Core.Games;
+using Cthangover.Core.Mods;
+using Cthangover.Core.Mods.Resolvers;
+using Cthangover.Core.Scenes;
+using Cthangover.Core.UI.Theming;
+using Cthangover.Core.Utils;
+using Cthangover.Mods.Effects.Atmosphere;
+using Cthangover.Mods.Interface.Theming;
+using Cthangover.Mods.Interface.Tool;
+using Cthangover.Mods.Rpg;
+using Cthangover.Mods.Rpg.Model;
+using Cthangover.Mods.Rpg.Render;
+using Cthangover.Mods.Schemas;
+using Cthangover.Mods.TileRender;
+using Cthangover.Tools.Common;
+using Cthangover.Tools.EntityEditor;
+using Cthangover.Tools.Contracts;
+using Cthangover.Tools.Services;
+using Godot;
+
 namespace Cthangover.Tools.RpgEditor
 {
-    using System;
-    using System.Collections.Generic;
-    using System.IO;
-    using System.Linq;
-    using System.Text.Json.Nodes;
-    using Cthangover.Core.Events;
-    using Cthangover.Core.Games;
-    using Cthangover.Core.Mods;
-    using Cthangover.Core.Mods.Resolvers;
-    using Cthangover.Core.Scenes;
-    using Cthangover.Core.UI.Theming;
-    using Cthangover.Core.Utils;
-    using Cthangover.Mods.Effects.Atmosphere;
-    using Cthangover.Mods.Interface.Theming;
-    using Cthangover.Mods.Interface.Tool;
-    using Cthangover.Mods.Rpg;
-    using Cthangover.Mods.Rpg.Model;
-    using Cthangover.Mods.Rpg.Render;
-    using Cthangover.Mods.Schemas;
-    using Cthangover.Mods.TileRender;
-    using Cthangover.Tools.Common;
-    using Cthangover.Tools.EntityEditor;
-    using Cthangover.Tools.Contracts;
-    using Cthangover.Tools.EntityEditor;
-    using Cthangover.Tools.Services;
-    using Godot;
-
-    /// <summary>What a click on the canvas does.</summary>
-    public enum RpgEditorTool
-    {
-        /// <summary>Select a placement; drag it to move it; Delete removes it.</summary>
-        Select,
-
-        /// <summary>Draw a new event rectangle directly on the map.</summary>
-        Event,
-
-        /// <summary>Paint the chosen surface (Ground) or segment (Structure); right button erases.</summary>
-        Paint,
-
-        /// <summary>Place the chosen sprite or actor on the cell clicked.</summary>
-        Place,
-
-        /// <summary>Paint collision codes over cells: <c>.</c> as the objects decide, <c>#</c> blocked, <c>o</c> forced open.</summary>
-        Collision,
-
-        /// <summary>Set the map's spawn point on the cell clicked.</summary>
-        Spawn,
-
-        /// <summary>Paint or erase (right button) the effect mask of the chosen atmosphere profile over cells.</summary>
-        Effects,
-    }
-
     /// <summary>
     /// The RPG map editor (plan 12.4) on the model v2: a palette of objects by shape, the map canvas in the game's own
     /// projections (switchable while editing), selection and moves of placements, the map's properties, teleport links,
@@ -64,74 +38,136 @@ namespace Cthangover.Tools.RpgEditor
     public partial class RpgEditorWindow : ToolWindow, IMapPickupEditor, IAtmosphereMaskEditor
     {
         private const string Category = "RPG_EDITOR";
+
         private const string MapDir = "maps";
+
         private const string MapExtension = ".json";
+
         private const string BattlesIntegration = "rpg__battles";
+
         private const string TestSuites = "test_suites/";
+
         private const int NewWidth = 16;
+
         private const int NewHeight = 12;
+
         private static readonly Color PaintFill = new(0.55f, 0.85f, 1f, 0.45f);
+
         private static readonly Color EraseFill = new(1f, 0.45f, 0.4f, 0.45f);
+
         private static readonly Color SelectFill = new(1f, 0.85f, 0.25f, 0.45f);
+
         private static readonly Color FootprintLine = new(1f, 1f, 1f, 0.22f);
+
         private static readonly Color HoverLine = new(1f, 1f, 1f, 0.9f);
+
         private static readonly Color SpawnFill = new(0.4f, 1f, 0.5f, 0.5f);
+
         private static readonly Color DoorFill = new(0.95f, 0.65f, 0.2f, 0.8f);
+
         private static readonly Color MarkerFill = new(0.75f, 0.85f, 0.95f, 0.65f);
+
         private static readonly Color GhostFill = new(1f, 1f, 1f, 0.3f);
+
         private static readonly Color GhostBlocked = new(1f, 0.3f, 0.3f, 0.7f);
 
-        private readonly RpgTextures textures = new();
+        private readonly RpgEditorTextures textures = new();
+
+        private readonly RpgEditorThumbnails thumbnails = new();
+
         private readonly RpgRenderSceneBuilder builder;
+
         private readonly ButtonGroup toolGroup = new();
+
         private readonly Dictionary<RpgEditorTool, Button> toolButtons = new();
+
         private Dictionary<string, RpgObject> objectTable = new(StringComparer.OrdinalIgnoreCase);
+
         private RpgEditorPalette palette;
+
         private RpgEditorCanvas canvas;
+
         private RpgEditorInspector inspector;
+
         private ModFileSelector selector;
+
         private OptionButton projectionPicker;
+
         private OptionButton collisionPicker;
+
         private OptionButton effectPicker;
+
         private Button playButton;
+
         private Button undoButton;
+
         private Button redoButton;
+
         private Button saveButton;
 
         private RpgMapDocument document;
+
         private RpgEditorScene scene;
+
         private string modId;
+
         private string mapPath;
+
         private bool isNewMap;
+
         private bool encountersShown;
+
         private RpgEditorTool tool = RpgEditorTool.Select;
+
         private string brushObject;
+
         private RpgObjectForm brushForm = RpgObjectForm.Surface;
+
         private string placeObject;
+
         private Texture2D ghostTexture;
+
         private string selectedId;
+
         private string collisionCode = RpgCollision.Block.ToString();
+
         private List<Vector2I> stroke;
+
         private MouseButton strokeButton;
+
         private Vector2I? dragOrigin;
         // The cell under the mouse while a selected placement is dragged, and its picture for the ghost.
+
         private Vector2I? dragTo;
+
         private Texture2D dragTexture;
+
         private Vector2I? hover;
+
         private readonly HashSet<string> marked = new(StringComparer.Ordinal);
+
         private Vector2I? boxFrom;
+
         private Vector2I? boxTo;
+
         private Vector2I? lastCell;
+
         private string effectProfile;
         // The cell of the previous press with the Select tool: a repeat press on it takes the next placement under it (plan 14.G18).
+
         private Vector2I? lastPressCell;
         // The handle a drag moves: a teleport target on this map or an arrival from another map (plan 14.G18).
+
         private RpgHandleKind handleKind;
+
         private string handlePlacement;
         // The placement that holds the arrival selected by a press on an incoming arrow (its teleport comes from another map).
+
         private string arrivalId;
 
-        /// <summary>Builds the window and opens the first writable mod's first map (or the choice of the selector).</summary>
+        /// <summary>
+        /// Builds the window and opens the first writable mod's first map (or the choice of the selector).
+        /// </summary>
         public RpgEditorWindow() : base("tools/rpg_editor/title")
         {
             builder = new RpgRenderSceneBuilder(textures.Image, textures.Charset);
@@ -152,31 +188,67 @@ namespace Cthangover.Tools.RpgEditor
             {
                 OpenFile(selector.CurrentMod, selector.CurrentPath);
             }
+
             selector.FileRequested += OnFileRequested;
             SelectTool(RpgEditorTool.Select);
             UpdateButtons();
         }
 
         /// <summary>The open document (null when no map is open).</summary>
-        public RpgMapDocument Document => document;
+        public RpgMapDocument Document
+        {
+            get
+            {
+                return document;
+            }
+        }
 
         /// <summary>The scene of the open map as the game reads it (null when no map is open).</summary>
-        public RpgEditorScene Scene => scene;
+        public RpgEditorScene Scene
+        {
+            get
+            {
+                return scene;
+            }
+        }
 
         /// <summary>The canvas (the map view).</summary>
-        public RpgEditorCanvas Canvas => canvas;
+        public RpgEditorCanvas Canvas
+        {
+            get
+            {
+                return canvas;
+            }
+        }
 
         /// <summary>The palette.</summary>
-        public RpgEditorPalette Palette => palette;
+        public RpgEditorPalette Palette
+        {
+            get
+            {
+                return palette;
+            }
+        }
 
         /// <summary>The inspector column.</summary>
-        public RpgEditorInspector Inspector => inspector;
-
-        /// <summary>Opens a map file the way the file selector does (asks first when there are unsaved changes).</summary>
-        public void OpenMapFile(string mod, string path) => OnFileRequested(mod, path);
+        public RpgEditorInspector Inspector
+        {
+            get
+            {
+                return inspector;
+            }
+        }
 
         /// <summary>
-        /// Opens the map and chooses the pickup object (category <c>pickup</c>) of <paramref name="itemId"/>: the one whose id ends
+        /// Opens a map file the way the file selector does (asks first when there are unsaved changes).
+        /// </summary>
+        public void OpenMapFile(string mod, string path)
+        {
+            OnFileRequested(mod, path);
+        }
+
+        /// <summary>
+        /// Opens the map and chooses the pickup object (category <c>pickup</c>) of <paramref name = "itemId"/>: the one whose id ends
         /// like the item's last segment (<c>rpg_plus/amber</c> → <c>rpg_plus/pickup/amber</c>). Null when the item has no pickup
         /// object; the item editor then writes one and asks again (plan 14.G4). The whole map is fitted to the canvas.
         /// </summary>
@@ -184,12 +256,28 @@ namespace Cthangover.Tools.RpgEditor
         {
             OpenMapFile(modId, mapPath);
             var name = itemId?.Split('/').Last();
-            var chosen = name == null ? null : objectTable.Values
-                .Where(o => o.Category == "pickup" && o.Form != null && o.ID.EndsWith("/" + name, StringComparison.Ordinal))
-                .OrderBy(o => o.ID, StringComparer.Ordinal)
-                .FirstOrDefault();
+            RpgObject chosen = null;
+            if (name != null)
+            {
+                foreach (var candidate in objectTable.Values)
+                {
+                    if (candidate.Category != "pickup" || candidate.Form == null
+                        || !candidate.ID.EndsWith("/" + name, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    if (chosen == null || StringComparer.Ordinal.Compare(candidate.ID, chosen.ID) < 0)
+                    {
+                        chosen = candidate;
+                    }
+                }
+            }
             if (chosen == null)
+            {
                 return null;
+            }
+
             ChooseObject(chosen.ID, chosen.Form.Value);
             canvas?.FitToView();
             return chosen.ID;
@@ -203,9 +291,18 @@ namespace Cthangover.Tools.RpgEditor
         }
 
         /// <summary>The atmosphere profile the Effects tool paints, or null.</summary>
-        public string EffectProfile => effectProfile;
+        public string EffectProfile
+        {
+            get
+            {
+                return effectProfile;
+            }
+        }
 
-        /// <summary>Selects the effects tool and the atmosphere profile <paramref name="profileId"/> (plan 14.G10); the effects editor's button calls it.</summary>
+        /// <summary>
+        /// Selects the effects tool and the atmosphere profile <paramref name = "profileId"/> (plan 14.G10);
+        /// the effects editor's button calls it.
+        /// </summary>
         public void ShowMaskTool(string profileId)
         {
             for (var i = 0; effectPicker != null && i < effectPicker.ItemCount; i++)
@@ -217,12 +314,18 @@ namespace Cthangover.Tools.RpgEditor
                     break;
                 }
             }
+
             SelectTool(RpgEditorTool.Effects);
         }
 
         /// <summary>The placements of this map marked by a box or Ctrl+A (their ids, in file order).</summary>
         public IReadOnlyList<string> Marked
-            => document == null ? new List<string>() : document.SelectionIds.Where(marked.Contains).ToList();
+        {
+            get
+            {
+                return document == null ? new List<string>() : document.SelectionIds.Where(marked.Contains).ToList();
+            }
+        }
 
         /// <summary>
         /// "Play from here" (plan 14.G1): the running game enters the open map at the cell of the last click on the canvas (the
@@ -231,21 +334,35 @@ namespace Cthangover.Tools.RpgEditor
         private void PlayFromHere()
         {
             if (document == null || scene == null)
+            {
                 return;
+            }
+
             if (RpgWorldHost.Current == null)
             {
                 SetStatus(ToolUi.Tr("tools/rpg_editor/play_no_game"), ToolStatusKind.Error);
                 return;
             }
+
             if ((_dirty || isNewMap) && !Save())
+            {
                 return;
+            }
+
             if (!Entities.Collect<RpgMap>().ContainsKey(document.MapId))
             {
                 SetStatus(ToolUi.Tr("tools/rpg_editor/play_not_loaded"), ToolStatusKind.Error);
                 return;
             }
+
             var cell = lastCell ?? new Vector2I(scene.Map.Spawn?.X ?? 0, scene.Map.Spawn?.Y ?? 0);
-            RpgWorldHost.Teleport(new RpgTeleport { Map = document.MapId, X = cell.X, Y = cell.Y, Dir = RpgDirection.Down });
+            RpgWorldHost.Teleport(new RpgTeleport
+            {
+                Map = document.MapId,
+                X = cell.X,
+                Y = cell.Y,
+                Dir = RpgDirection.Down
+            });
             SetStatus(string.Format(ToolUi.Tr("tools/rpg_editor/play_started"), document.MapId, cell.X, cell.Y), ToolStatusKind.Ok);
             GameLogger.Log(Category, $"play from '{document.MapId}' at {cell.X},{cell.Y}");
         }
@@ -254,23 +371,40 @@ namespace Cthangover.Tools.RpgEditor
         private bool SelectAll()
         {
             if (document == null)
+            {
                 return false;
+            }
+
             marked.Clear();
             foreach (var id in document.SelectionIds)
+            {
                 marked.Add(id);
+            }
+
             selectedId = null;
             RefreshSelection();
             return true;
         }
 
-        /// <summary>The placements an action acts on: the marked ones in file order, else the selected one, else none.</summary>
+        /// <summary>
+        /// The placements an action acts on: the marked ones in file order, else the selected one, else none.
+        /// </summary>
         private List<string> ActedIds()
         {
             if (document == null)
+            {
                 return new List<string>();
+            }
+
             if (marked.Count > 0)
+            {
                 return Marked.ToList();
-            return selectedId == null ? new List<string>() : new List<string> { selectedId };
+            }
+
+            return selectedId == null ? new List<string>() : new List<string>
+            {
+                selectedId
+            };
         }
 
         /// <summary>Ctrl+C: copies the acted-on placements to the clipboard (plan 14.G9).</summary>
@@ -282,20 +416,28 @@ namespace Cthangover.Tools.RpgEditor
                 SetStatus(ToolUi.Tr("tools/rpg_editor/copy_none"), ToolStatusKind.Error);
                 return;
             }
+
             RpgPlacementClipboard.Set(clips);
             SetStatus(string.Format(ToolUi.Tr("tools/rpg_editor/copied"), clips.Count), ToolStatusKind.Info);
         }
 
-        /// <summary>Ctrl+V: pastes the clipboard with its first cell on the hovered cell (else the last click); the copies are marked.</summary>
+        /// <summary>
+        /// Ctrl+V: pastes the clipboard with its first cell on the hovered cell (else the last click); the
+        /// copies are marked.
+        /// </summary>
         private void PasteClipboard()
         {
             if (document == null)
+            {
                 return;
+            }
+
             if (RpgPlacementClipboard.Content.Count == 0)
             {
                 SetStatus(ToolUi.Tr("tools/rpg_editor/paste_none"), ToolStatusKind.Error);
                 return;
             }
+
             var at = hover ?? lastCell ?? Vector2I.Zero;
             var ids = document.Paste(RpgPlacementClipboard.Content, at.X, at.Y);
             if (ids == null)
@@ -303,9 +445,13 @@ namespace Cthangover.Tools.RpgEditor
                 SetStatus(ToolUi.Tr("tools/rpg_editor/paste_refused"), ToolStatusKind.Error);
                 return;
             }
+
             marked.Clear();
             foreach (var id in ids)
+            {
                 marked.Add(id);
+            }
+
             selectedId = null;
             AfterChange();
             SetStatus(string.Format(ToolUi.Tr("tools/rpg_editor/pasted"), ids.Count), ToolStatusKind.Ok);
@@ -315,21 +461,33 @@ namespace Cthangover.Tools.RpgEditor
         private void DeleteSelection()
         {
             if (document == null)
+            {
                 return;
+            }
+
             if (marked.Count == 0)
             {
                 if (selectedId != null)
+                {
                     DeletePlacement(selectedId);
+                }
+
                 return;
             }
+
             if (!document.DeletePlacements(marked.ToList()))
+            {
                 return;
+            }
+
             marked.Clear();
             selectedId = null;
             AfterChange();
         }
 
-        /// <summary>Marks the placements inside the dragged box (inclusive corners) and clears the single selection.</summary>
+        /// <summary>
+        /// Marks the placements inside the dragged box (inclusive corners) and clears the single selection.
+        /// </summary>
         private void FinishBox()
         {
             var from = boxFrom;
@@ -346,9 +504,12 @@ namespace Cthangover.Tools.RpgEditor
                 foreach (var (id, _, x, y) in scene.Editables)
                 {
                     if (x >= x0 && x <= x1 && y >= y0 && y <= y1)
+                    {
                         marked.Add(id);
+                    }
                 }
             }
+
             selectedId = null;
             RefreshSelection();
         }
@@ -361,32 +522,81 @@ namespace Cthangover.Tools.RpgEditor
                 marked.Clear();
                 return;
             }
-            marked.RemoveWhere(id => document.IsDeleted(id) || !document.SelectionIds.Contains(id));
+
+            marked.RemoveWhere(IsMarkedUnavailable);
         }
 
         /// <summary>The tool a click does.</summary>
-        public RpgEditorTool Tool => tool;
+        public RpgEditorTool Tool
+        {
+            get
+            {
+                return tool;
+            }
+        }
 
         /// <summary>The sprite or actor the Place tool puts, or null.</summary>
-        public string PlaceObject => placeObject;
+        public string PlaceObject
+        {
+            get
+            {
+                return placeObject;
+            }
+        }
 
         /// <summary>The selected placement's id, or null.</summary>
-        public string SelectedId => selectedId;
+        public string SelectedId
+        {
+            get
+            {
+                return selectedId;
+            }
+        }
 
-        /// <summary>The placement of the arrival selected on the canvas (its teleport comes from another map), or null.</summary>
-        public string ArrivalId => arrivalId;
+        /// <summary>
+        /// The placement of the arrival selected on the canvas (its teleport comes from another map), or null.
+        /// </summary>
+        public string ArrivalId
+        {
+            get
+            {
+                return arrivalId;
+            }
+        }
 
         /// <summary>True when the rpg__battles integration is mounted, so the encounters section is shown.</summary>
-        public bool EncountersShown => encountersShown;
+        public bool EncountersShown
+        {
+            get
+            {
+                return encountersShown;
+            }
+        }
 
         /// <summary>The map id of the open document (its scene name), or null.</summary>
-        public string MapId => document?.MapId;
+        public string MapId
+        {
+            get
+            {
+                return document?.MapId;
+            }
+        }
 
         /// <summary>Releases the textures and the builder; the canvas releases its scene.</summary>
         protected override void Cleanup()
         {
             ModEventBus.Unsubscribe<EntitiesSavedEvent>(OnEntitiesSaved);
+            toolGroup.Pressed -= OnToolButtonPressed;
             canvas?.Clear();
+            if (canvas != null)
+            {
+                canvas.GhostTexture = null;
+            }
+
+            ghostTexture = null;
+            dragTexture = null;
+            palette?.ReleaseIcons();
+            thumbnails.Dispose();
             builder.Dispose();
             textures.Dispose();
             base.Cleanup();
@@ -396,146 +606,92 @@ namespace Cthangover.Tools.RpgEditor
 
         private void BuildUi()
         {
-            var outer = CreateFillContainer();
-            AddChild(outer);
-            // Long translated toolbar labels must not push the inspector outside the window.
-            var toolbarScroll = new ScrollContainer
+            var view = new RpgEditorWorkbench(objectTable, thumbnails, toolGroup);
+            AddChild(view);
+            view.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+            try
             {
-                Name = "RpgToolbarScroll",
-                HorizontalScrollMode = ScrollContainer.ScrollMode.Auto,
-                VerticalScrollMode = ScrollContainer.ScrollMode.Disabled,
-                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            };
-            toolbarScroll.AddChild(BuildToolbar());
-            outer.AddChild(toolbarScroll);
-
-            var main = new HSplitContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, SizeFlagsVertical = Control.SizeFlags.ExpandFill };
-            outer.AddChild(main);
-
-            var left = new VBoxContainer();
-            left.AddChild(ToolUi.Section("tools/rpg_editor/palette_title"));
-            palette = new RpgEditorPalette(objectTable, textures.Image, textures.Charset);
-            palette.ObjectChosen += OnObjectChosen;
-            palette.CharacterChosen += OnCharacterChosen;
-            left.AddChild(palette);
-            var newObject = ToolUi.Button("tools/rpg_editor/new_object", CreateMapObject, ButtonKind.Primary);
-            newObject.Name = "NewMapObject";
-            newObject.Disabled = Cthangover.Core.UI.Tool.ToolFactory.Instance.Get("rpg_object_editor") == null;
-            left.AddChild(newObject);
-            main.AddChild(CreateSidebar(left, 300));
-
-            canvas = new RpgEditorCanvas();
-            canvas.CellPressed += OnCellPressed;
-            canvas.CellDragged += OnCellDragged;
-            canvas.CellReleased += OnCellReleased;
-            canvas.Hovered += OnHovered;
-            canvas.ResizePressed += OnResizePressed;
-            canvas.ResizeDragged += OnResizeDragged;
-            canvas.ResizeReleased += OnResizeReleased;
-            main.AddChild(canvas);
-
-            var right = new VBoxContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
-            var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
-            inspector = new RpgEditorInspector { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            inspector.PlacementMoved += OnPlacementMoved;
-            inspector.RouteChanged += OnRouteChanged;
-            inspector.RouteDrawingRequested += BeginRouteDrawing;
-            inspector.RoutePreviewChanged += OnRoutePreview;
-            inspector.PlacementDeleted += id => DeletePlacement(id);
-            inspector.PlacementReset += OnPlacementReset;
-            inspector.PropertyChanged += OnPropertyChanged;
-            inspector.MapSizeChanged += OnMapSizeChanged;
-            inspector.BackdropPositionChanged += OnBackdropPositionChanged;
-            inspector.BackdropPreviewChanged += OnBackdropPreviewChanged;
-            inspector.ScalePreviewChanged += OnScalePreviewChanged;
-            inspector.ScaleChanged += OnScaleChanged;
-            inspector.GridVisibilityChanged += OnGridVisibilityChanged;
-            inspector.EventChanged += OnEventChanged;
-            inspector.SpawnPickRequested += () => SelectTool(RpgEditorTool.Spawn);
-            inspector.EncountersChanged += table => ChangeProperty("Encounters", table);
-            inspector.LinkOpened += OnLinkOpened;
-            WireInteractParts();
-            scroll.AddChild(inspector);
-            right.AddChild(scroll);
-            main.AddChild(CreateSidebar(right, 320));
-            UseGameProjection();
+                view.EnsureConstructed();
+                palette = view.Palette;
+                canvas = view.Canvas;
+                inspector = view.Inspector;
+                selector = view.Selector;
+                projectionPicker = view.ProjectionPicker;
+                collisionPicker = view.CollisionPicker;
+                effectPicker = view.EffectPicker;
+                playButton = view.PlayButton;
+                undoButton = view.UndoButton;
+                redoButton = view.RedoButton;
+                saveButton = view.SaveButton;
+                foreach (var pair in view.ToolButtons)
+                {
+                    toolButtons[pair.Key] = pair.Value;
+                }
+                toolGroup.Pressed += OnToolButtonPressed;
+                palette.ObjectChosen += OnObjectChosen;
+                palette.CharacterChosen += OnCharacterChosen;
+                canvas.CellPressed += OnCellPressed;
+                canvas.CellDragged += OnCellDragged;
+                canvas.CellReleased += OnCellReleased;
+                canvas.Hovered += OnHovered;
+                canvas.ResizePressed += OnResizePressed;
+                canvas.ResizeDragged += OnResizeDragged;
+                canvas.ResizeReleased += OnResizeReleased;
+                inspector.PlacementMoved += OnPlacementMoved;
+                inspector.RouteChanged += OnRouteChanged;
+                inspector.RouteDrawingRequested += BeginRouteDrawing;
+                inspector.RoutePreviewChanged += OnRoutePreview;
+                inspector.PlacementDeleted += OnDeleteRequested;
+                inspector.PlacementReset += OnPlacementReset;
+                inspector.PropertyChanged += OnPropertyChanged;
+                inspector.MapSizeChanged += OnMapSizeChanged;
+                inspector.BackdropPositionChanged += OnBackdropPositionChanged;
+                inspector.BackdropPreviewChanged += OnBackdropPreviewChanged;
+                inspector.ScalePreviewChanged += OnScalePreviewChanged;
+                inspector.ScaleChanged += OnScaleChanged;
+                inspector.GridVisibilityChanged += OnGridVisibilityChanged;
+                inspector.EventChanged += OnEventChanged;
+                inspector.SpawnPickRequested += OnSpawnRequested;
+                inspector.EncountersChanged += OnEncountersChanged;
+                inspector.LinkOpened += OnLinkOpened;
+                view.NewObjectButton.Pressed += CreateMapObject;
+                view.FitButton.Pressed += OnFit;
+                saveButton.Pressed += OnSaveRequested;
+                undoButton.Pressed += OnUndoRequested;
+                redoButton.Pressed += OnRedoRequested;
+                playButton.Pressed += PlayFromHere;
+                collisionPicker.ItemSelected += OnCollisionChoice;
+                effectPicker.ItemSelected += OnEffectChoice;
+                projectionPicker.ItemSelected += OnProjectionChoice;
+                if (!effectPicker.Disabled && effectPicker.ItemCount > 0)
+                {
+                    effectProfile = effectPicker.GetItemMetadata(0).AsString();
+                }
+                WireInteractParts();
+                UseGameProjection();
+            }
+            catch
+            {
+                RemoveChild(view);
+                view.Free();
+                throw;
+            }
         }
 
-        private HBoxContainer BuildToolbar()
-        {
-            var bar = CreateToolbar();
-            selector = new ModFileSelector(MapDir, MapExtension);
-            bar.AddChild(selector);
-            saveButton = ToolUi.Button("tools/rpg_editor/save", () => Save(), ButtonKind.Primary, "tools/rpg_editor/save_tip");
-            bar.AddChild(saveButton);
-            playButton = ToolUi.Button("tools/rpg_editor/play", PlayFromHere, ButtonKind.Primary, "tools/rpg_editor/play_tip");
-            bar.AddChild(playButton);
-            undoButton = ToolUi.Button("tools/rpg_editor/undo", () => Undo(), ButtonKind.Secondary, "tools/rpg_editor/undo_tip");
-            redoButton = ToolUi.Button("tools/rpg_editor/redo", () => Redo(), ButtonKind.Secondary, "tools/rpg_editor/redo_tip");
-            bar.AddChild(undoButton);
-            bar.AddChild(redoButton);
-            bar.AddChild(ToolUi.Divider());
-            foreach (var (id, key, tip) in new[]
-            {
-                (RpgEditorTool.Select, "tools/rpg_editor/tool_select", "tools/rpg_editor/tool_select_tip"),
-                (RpgEditorTool.Event, "tools/rpg_editor/tool_event", "tools/rpg_editor/tool_event_tip"),
-                (RpgEditorTool.Paint, "tools/rpg_editor/tool_paint", "tools/rpg_editor/tool_paint_tip"),
-                (RpgEditorTool.Place, "tools/rpg_editor/tool_place", "tools/rpg_editor/tool_place_tip"),
-                (RpgEditorTool.Collision, "tools/rpg_editor/tool_collision", "tools/rpg_editor/tool_collision_tip"),
-                (RpgEditorTool.Spawn, "tools/rpg_editor/tool_spawn", "tools/rpg_editor/tool_spawn_tip"),
-                (RpgEditorTool.Effects, "tools/rpg_editor/tool_effects", "tools/rpg_editor/tool_effects_tip"),
-            })
-            {
-                var button = new Button { Text = ToolUi.Tr(key), TooltipText = ToolUi.Tr(tip), ToggleMode = true, ButtonGroup = toolGroup, FocusMode = Control.FocusModeEnum.None };
-                var target = id;
-                button.Pressed += () => SelectTool(target);
-                toolButtons[id] = button;
-                bar.AddChild(button);
-            }
-            collisionPicker = new OptionButton { TooltipText = ToolUi.Tr("tools/rpg_editor/collision_tip") };
-            collisionPicker.AddItem(ToolUi.Tr("tools/rpg_editor/collision_auto"), 0);
-            collisionPicker.AddItem(ToolUi.Tr("tools/rpg_editor/collision_block"), 1);
-            collisionPicker.AddItem(ToolUi.Tr("tools/rpg_editor/collision_open"), 2);
-            collisionPicker.Select(1);
-            collisionPicker.ItemSelected += index => collisionCode = index switch { 1 => "#", 2 => "o", _ => "." };
-            bar.AddChild(collisionPicker);
-            effectPicker = new OptionButton { Name = "EffectProfile", TooltipText = ToolUi.Tr("tools/rpg_editor/effect_profile_tip") };
-            effectPicker.ItemSelected += index => effectProfile = effectPicker.GetItemMetadata((int)index).AsString();
-            foreach (var profile in AtmosphereCatalog.Collect(required: false).Keys.OrderBy(k => k, StringComparer.Ordinal))
-            {
-                effectPicker.AddItem(profile);
-                effectPicker.SetItemMetadata(effectPicker.ItemCount - 1, profile);
-            }
-            if (effectPicker.ItemCount > 0)
-            {
-                effectPicker.Select(0);
-                effectProfile = effectPicker.GetItemMetadata(0).AsString();
-            }
-            else
-            {
-                effectPicker.AddItem(ToolUi.Tr("tools/rpg_editor/effect_profiles_none"));
-                effectPicker.SetItemDisabled(0, true);
-                effectPicker.Disabled = true;
-                effectPicker.TooltipText = ToolUi.Tr("tools/rpg_editor/effect_profiles_none_tip");
-                toolButtons[RpgEditorTool.Effects].Disabled = true;
-                toolButtons[RpgEditorTool.Effects].TooltipText = effectPicker.TooltipText;
-            }
-            bar.AddChild(effectPicker);
-            bar.AddChild(ToolUi.Divider());
-            projectionPicker = new OptionButton { TooltipText = ToolUi.Tr("tools/rpg_editor/projection_tip") };
-            projectionPicker.AddItem(ToolUi.Tr("tools/rpg_editor/projection_top"), 0);
-            projectionPicker.AddItem(ToolUi.Tr("tools/rpg_editor/projection_iso"), 1);
-            projectionPicker.ItemSelected += index => SetProjection(index == 1 ? RpgEditorCanvas.Isometric : RpgEditorCanvas.TopDown);
-            bar.AddChild(projectionPicker);
-            bar.AddChild(ToolUi.Button("tools/rpg_editor/fit", () => canvas?.FitToView(), ButtonKind.Secondary, "tools/rpg_editor/fit_tip"));
-            return bar;
-        }
 
-        /// <summary>Opens the editor in the projection the game draws its maps with, so painted collision lines up with the game.</summary>
+
+        /// <summary>
+        /// Opens the editor in the projection the game draws its maps with, so painted collision lines up with
+        /// the game.
+        /// </summary>
         private void UseGameProjection()
         {
             var id = ActiveGame.GetSetting("tile.renderer");
-            if ((id != RpgEditorCanvas.Isometric && id != RpgEditorCanvas.TopDown) || !RpgEditorCanvas.HasProjection(id)) return;
+            if ((id != RpgEditorCanvas.Isometric && id != RpgEditorCanvas.TopDown) || !RpgEditorCanvas.HasProjection(id))
+            {
+                return;
+            }
+
             canvas.SetProjection(id);
             projectionPicker.Select(id == RpgEditorCanvas.Isometric ? 1 : 0);
         }
@@ -546,9 +702,10 @@ namespace Cthangover.Tools.RpgEditor
         {
             if (document != null && (mod != modId || path != mapPath))
             {
-                RunDiscardingChanges(() => OpenFile(mod, path), () => selector.Show(modId, mapPath));
+                ConfirmOpen(mod, path);
                 return;
             }
+
             OpenFile(mod, path);
         }
 
@@ -562,6 +719,7 @@ namespace Cthangover.Tools.RpgEditor
                 UpdateButtons();
                 return;
             }
+
             var id = Path.GetFileNameWithoutExtension(path);
             var existing = ModFileService.ReadText(mod, path) != null;
             if (!existing && SceneFileService.ValidName(id) != id)
@@ -570,6 +728,7 @@ namespace Cthangover.Tools.RpgEditor
                 selector.Show(modId, mapPath);
                 return;
             }
+
             var opened = existing ? OpenDocument(mod, path, id) : CreateDocument(mod, path, id);
             if (opened == null)
             {
@@ -577,6 +736,7 @@ namespace Cthangover.Tools.RpgEditor
                 UpdateButtons();
                 return;
             }
+
             modId = mod;
             mapPath = path;
             document = opened.Value.Document;
@@ -585,15 +745,15 @@ namespace Cthangover.Tools.RpgEditor
             SetTool(RpgEditorTool.Select);
             RebuildScene();
             selector.Show(modId, mapPath);
-            SetStatus(string.Format(ToolUi.Tr(isNewMap ? "tools/rpg_editor/status_new" : "tools/rpg_editor/status_opened"), id, mod), ToolStatusKind.Info);
+            SetStatus(string.Format(ToolUi.Tr(isNewMap ? "tools/rpg_editor/status_new" : "tools/rpg_editor/status_opened"), id, mod),
+                ToolStatusKind.Info);
             GameLogger.Log(Category, $"opened map '{id}' of '{mod}'" + (isNewMap ? " (new)" : string.Empty));
         }
 
         private (RpgMapDocument Document, bool New)? OpenDocument(string mod, string path, string id)
         {
             var files = OwnFiles(mod);
-            var doc = RpgMapDocument.Open(id, mod, files, ForeignOf("rpg_map", mod), ForeignOf("rpg_placement", mod),
-                BaseOf(mod), FormOf);
+            var doc = RpgMapDocument.Open(id, mod, files, ForeignOf("rpg_map", mod), ForeignOf("rpg_placement", mod), BaseOf(mod), FormOf);
             return doc == null ? null : (doc, false);
         }
 
@@ -605,13 +765,21 @@ namespace Cthangover.Tools.RpgEditor
                 ["Width"] = NewWidth,
                 ["Height"] = NewHeight,
                 ["Zoom"] = 2,
-                ["Spawn"] = new JsonObject { ["X"] = 1, ["Y"] = 1, ["Dir"] = "Down" },
+                ["Spawn"] = new JsonObject
+                {
+                    ["X"] = 1,
+                    ["Y"] = 1,
+                    ["Dir"] = "Down"
+                },
                 ["Legend"] = new JsonObject(),
             };
             var files = OwnFiles(mod).ToList();
-            files.Add((path, EntityDocument.Serialize(new JsonObject { ["Kind"] = "rpg_map", ["Items"] = new JsonArray(template) })));
-            var doc = RpgMapDocument.Open(id, mod, files, ForeignOf("rpg_map", mod), ForeignOf("rpg_placement", mod),
-                BaseOf(mod), FormOf);
+            files.Add((path, EntityDocument.Serialize(new JsonObject
+            {
+                ["Kind"] = "rpg_map",
+                ["Items"] = new JsonArray(template)
+            })));
+            var doc = RpgMapDocument.Open(id, mod, files, ForeignOf("rpg_map", mod), ForeignOf("rpg_placement", mod), BaseOf(mod), FormOf);
             return doc == null ? null : (doc, true);
         }
 
@@ -642,25 +810,42 @@ namespace Cthangover.Tools.RpgEditor
             foreach (var path in ModFileService.ListFiles(mod, string.Empty, ".json"))
             {
                 if (path.StartsWith(TestSuites, StringComparison.Ordinal))
+                {
                     continue;
+                }
+
                 var text = ModFileService.ReadText(mod, path);
                 if (text != null)
+                {
                     result.Add((path, text));
+                }
             }
+
             return result;
         }
 
         private static List<(string Id, string OwnerMod, string File, JsonObject Written)> ForeignOf(string kind, string mod)
-            => ForeignEntities.Scan(kind, mod).Where(e => !e.File.StartsWith(TestSuites, StringComparison.Ordinal)).ToList();
+        {
+            return ForeignEntities.Scan(kind, mod).Where(IsGameEntity).ToList();
+        }
 
         private static Func<string, string, JsonObject> BaseOf(string mod)
-            => (kind, id) => ForeignEntities.BaseWithout(kind, id, mod, ForeignEntities.PatchFile(kind, mod));
+        {
+            return new RpgEditorBaseReader(mod).Read;
+        }
 
         private Func<string, RpgObjectForm?> FormOf
-            => id => ObjectOf(id)?.Form;
+        {
+            get
+            {
+                return ObjectFormOf;
+            }
+        }
 
         private RpgObject ObjectOf(string id)
-            => id != null && objectTable.TryGetValue(id, out var value) ? value : null;
+        {
+            return id != null && objectTable.TryGetValue(id, out var value) ? value : null;
+        }
 
         private void OnLinkOpened(string mapId, int x, int y)
         {
@@ -669,41 +854,62 @@ namespace Cthangover.Tools.RpgEditor
                 SetStatus(string.Format(ToolUi.Tr("tools/rpg_editor/link_no_file"), mapId), ToolStatusKind.Error);
                 return;
             }
-            RunDiscardingChanges(() => OpenFile(found.Mod, found.Path), () => selector.Show(modId, mapPath));
+
+            ConfirmOpen(found.Mod, found.Path);
         }
 
         /// <summary>The writable mod and the path of a map file with this id, or null.</summary>
         private static (string Mod, string Path)? FindMapFile(string mapId)
         {
             if (string.IsNullOrEmpty(mapId))
+            {
                 return null;
+            }
+
             foreach (var mod in ModFileService.ListWritableMods())
             {
-                var path = ModFileService.ListFiles(mod, MapDir, MapExtension).FirstOrDefault(p => Path.GetFileNameWithoutExtension(p) == mapId);
-                if (path != null)
-                    return (mod, path);
+                foreach (var path in ModFileService.ListFiles(mod, MapDir, MapExtension))
+                {
+                    if (Path.GetFileNameWithoutExtension(path) == mapId)
+                    {
+                        return (mod, path);
+                    }
+                }
             }
+
             return null;
         }
 
-        /// <summary>Saves the document: changed files, the new map's file and scene (first save), the caches, and the running game.</summary>
+        /// <summary>
+        /// Saves the document: changed files, the new map's file and scene (first save), the caches, and the
+        /// running game.
+        /// </summary>
         public bool Save()
         {
             if (document == null)
+            {
                 return false;
+            }
+
             var problems = document.Validate();
             if (problems.Count > 0)
             {
                 SetStatus(string.Format(ToolUi.Tr(problems[0].Key), problems[0].Argument), ToolStatusKind.Error);
                 return false;
             }
+
             var files = document.Changes();
             if (isNewMap)
             {
-                var text = EntityDocument.Serialize(new JsonObject { ["Kind"] = "rpg_map", ["Items"] = new JsonArray(document.Map.Data.DeepClone()) });
-                files.RemoveAll(f => f.Path == mapPath);
+                var text = EntityDocument.Serialize(new JsonObject
+                {
+                    ["Kind"] = "rpg_map",
+                    ["Items"] = new JsonArray(document.Map.Data.DeepClone())
+                });
+                files.RemoveAll(IsCurrentMapFile);
                 files.Add((mapPath, text));
             }
+
             foreach (var (path, text) in files)
             {
                 var written = text == null ? ModFileService.DeleteFile(modId, path) : ModFileService.WriteText(modId, path, text);
@@ -713,20 +919,44 @@ namespace Cthangover.Tools.RpgEditor
                     return false;
                 }
             }
+
             if (isNewMap)
+            {
                 WriteSceneOf(document.MapId);
+            }
+
             // Objects of other mods (painted surfaces, placed sprites) and the scenarios, maps, items and shops that the
             // placements' interactions name need that mod in depends (plan 14.G16).
-            var objectRefs = document.Legend.Values
-                .Concat(document.Placements.Where(r => !r.IsForeign && r.Data?["Object"] is JsonValue)
-                    .Select(r => r.Data["Object"].GetValue<string>()))
-                .Distinct(StringComparer.Ordinal)
-                .Select(id => ("rpg_object", id));
-            var interactRefs = document.Placements.Where(r => !r.IsForeign)
-                .SelectMany(r => RpgInteractReferences.Of(r.Data?["Interact"] as JsonObject));
-            // A dependency's placement that the document changes (an arrival moved here) is a patch of the edited mod (plan 14.G18).
-            var placementRefs = document.PlacementRecords.Where(r => r.IsForeign).Select(r => ("rpg_placement", r.Id));
-            var added = ModDependencies.EnsureReferenced(modId, objectRefs.Concat(interactRefs).Concat(placementRefs).Concat(EventReferences()).ToList());
+            var objectIds = new List<string>(document.Legend.Values);
+            var interactRefs = new List<(string Kind, string Id)>();
+            foreach (var record in document.Placements)
+            {
+                if (record.IsForeign)
+                {
+                    continue;
+                }
+
+                if (record.Data?["Object"] is JsonValue)
+                {
+                    objectIds.Add(record.Data["Object"].GetValue<string>());
+                }
+
+                interactRefs.AddRange(RpgInteractReferences.Of(record.Data?["Interact"] as JsonObject));
+            }
+
+            var objectRefs = objectIds.Distinct(StringComparer.Ordinal).Select(ObjectReference);
+            // Changing a foreign placement writes a patch in this map's writable mod.
+            var placementRefs = new List<(string Kind, string Id)>();
+            foreach (var record in document.PlacementRecords)
+            {
+                if (record.IsForeign)
+                {
+                    placementRefs.Add(("rpg_placement", record.Id));
+                }
+            }
+
+            var added = ModDependencies.EnsureReferenced(modId,
+                objectRefs.Concat(interactRefs).Concat(placementRefs).Concat(EventReferences()).ToList());
             document.MarkSaved();
             isNewMap = false;
             MarkClean();
@@ -745,13 +975,26 @@ namespace Cthangover.Tools.RpgEditor
         {
             var scenePath = SceneFileEntry.PathFor(mapId);
             if (ModFileService.ReadText(modId, scenePath) != null)
+            {
                 return;
+            }
+
             var backgrounds = ModResourceService.GetBackgroundIds();
-            var entry = new SceneFileEntry { ModId = modId, RelativePath = scenePath, Name = mapId };
+            var entry = new SceneFileEntry
+            {
+                ModId = modId,
+                RelativePath = scenePath,
+                Name = mapId
+            };
             if (backgrounds.Count > 0)
+            {
                 entry.Backgrounds.Add(backgrounds[0]);
+            }
+
             if (!SceneFileService.Write(entry))
+            {
                 GameLogger.Log(Category, $"scene '{mapId}' of '{modId}' could not be written", LogLevel.Error);
+            }
         }
 
         private static void ClearCaches()
@@ -767,7 +1010,10 @@ namespace Cthangover.Tools.RpgEditor
         public bool Undo()
         {
             if (document == null || !document.Undo())
+            {
                 return false;
+            }
+
             AfterChange();
             return true;
         }
@@ -776,7 +1022,10 @@ namespace Cthangover.Tools.RpgEditor
         public bool Redo()
         {
             if (document == null || !document.Redo())
+            {
                 return false;
+            }
+
             AfterChange();
             return true;
         }
@@ -784,7 +1033,10 @@ namespace Cthangover.Tools.RpgEditor
         private void AfterChange()
         {
             if (selectedId != null && !document.SelectionIds.Contains(selectedId))
+            {
                 selectedId = null;
+            }
+
             PruneMarked();
             SetDirty();
             RebuildScene();
@@ -793,42 +1045,62 @@ namespace Cthangover.Tools.RpgEditor
         private void ChangeProperty(string key, JsonNode value)
         {
             if (document == null)
+            {
                 return;
+            }
+
             if (document.SetProperty(key, value))
+            {
                 AfterChange();
+            }
         }
 
-        private void OnPropertyChanged(string key, JsonNode value) => ChangeProperty(key, value);
+        private void OnPropertyChanged(string key, JsonNode value)
+        {
+            ChangeProperty(key, value);
+        }
 
         private void OnPlacementMoved(string id, int x, int y)
         {
             if (document != null && document.MovePlacement(id, x, y))
+            {
                 AfterChange();
+            }
         }
 
         private void OnPlacementReset(string id)
         {
             if (document != null && document.ResetPlacement(id))
+            {
                 AfterChange();
+            }
         }
 
         private void DeletePlacement(string id)
         {
             if (document == null || !document.DeletePlacement(id))
+            {
                 return;
+            }
+
             if (selectedId == id)
+            {
                 selectedId = null;
+            }
+
             AfterChange();
         }
 
         // ── tools ──────────────────────────────────────────────────
 
-        /// <summary>Makes <paramref name="next"/> the tool a click does (and shows it on the toolbar).</summary>
+        /// <summary>Makes <paramref name = "next"/> the tool a click does (and shows it on the toolbar).</summary>
         public void SelectTool(RpgEditorTool next)
         {
             SetTool(next);
             if (toolButtons.TryGetValue(next, out var button))
+            {
                 button.SetPressedNoSignal(true);
+            }
         }
 
         private void SetTool(RpgEditorTool next)
@@ -842,17 +1114,26 @@ namespace Cthangover.Tools.RpgEditor
             handleKind = RpgHandleKind.None;
             handlePlacement = null;
             if (toolButtons.TryGetValue(next, out var button))
+            {
                 button.SetPressedNoSignal(true);
+            }
+
             RebuildMarks();
         }
 
-        /// <summary>Chooses an object from the palette: a surface or a segment paints, a sprite or an actor is placed.</summary>
+        /// <summary>
+        /// Chooses an object from the palette: a surface or a segment paints, a sprite or an actor is placed.
+        /// </summary>
         public void ChooseObject(string id, RpgObjectForm form)
         {
             var obj = ObjectOf(id);
             if (obj == null)
+            {
                 return;
-            ghostTexture = RpgEditorPalette.ThumbnailOf(obj, textures.Image, textures.Charset);
+            }
+
+            canvas.GhostTexture = null;
+            ghostTexture = textures.Preview("ghost", obj);
             switch (form)
             {
                 case RpgObjectForm.Surface:
@@ -866,11 +1147,15 @@ namespace Cthangover.Tools.RpgEditor
                     SelectTool(RpgEditorTool.Place);
                     break;
             }
+
             palette?.Select(form, id);
             RebuildMarks();
         }
 
-        private void OnObjectChosen(string id, RpgObjectForm form) => ChooseObject(id, form);
+        private void OnObjectChosen(string id, RpgObjectForm form)
+        {
+            ChooseObject(id, form);
+        }
 
         /// <summary>Switches the renderer; the view stays where it is.</summary>
         public void SetProjection(string id)
@@ -878,7 +1163,10 @@ namespace Cthangover.Tools.RpgEditor
             canvas?.SetProjection(id);
             var index = id == RpgEditorCanvas.Isometric ? 1 : 0;
             if (projectionPicker != null && projectionPicker.Selected != index)
+            {
                 projectionPicker.Select(index);
+            }
+
             // A projection switch discards an unapplied background preview as well as its form values.
             RebuildScene();
         }
@@ -888,27 +1176,47 @@ namespace Cthangover.Tools.RpgEditor
         private void OnCellPressed(Vector2I cell, MouseButton button, bool doubleClick)
         {
             if (document == null)
+            {
                 return;
+            }
+
             lastCell = cell;
-            if (DrawRouteCell(cell, button)) return;
-            if (button == MouseButton.Left && TryPickTargetCell(cell))
+            if (DrawRouteCell(cell, button))
+            {
                 return;
+            }
+
+            if (button == MouseButton.Left && TryPickTargetCell(cell))
+            {
+                return;
+            }
+
             if (button == MouseButton.Right)
             {
                 if (tool is RpgEditorTool.Paint or RpgEditorTool.Collision or RpgEditorTool.Effects)
+                {
                     BeginStroke(cell, button);
+                }
                 else if (tool == RpgEditorTool.Select)
                 {
                     selectedId = null;
                     marked.Clear();
                 }
+
                 RefreshSelection();
                 return;
             }
+
             switch (tool)
             {
                 case RpgEditorTool.Event:
-                    if (button == MouseButton.Left) { boxFrom = cell; boxTo = cell; RebuildMarks(); }
+                    if (button == MouseButton.Left)
+                    {
+                        boxFrom = cell;
+                        boxTo = cell;
+                        RebuildMarks();
+                    }
+
                     break;
                 case RpgEditorTool.Select:
                     PressSelect(cell);
@@ -923,39 +1231,52 @@ namespace Cthangover.Tools.RpgEditor
                     break;
                 case RpgEditorTool.Spawn:
                     if (document.SetSpawn(cell.X, cell.Y))
+                    {
                         AfterChange();
+                    }
+
                     break;
             }
         }
 
         private void BeginStroke(Vector2I cell, MouseButton button)
         {
-            stroke = new List<Vector2I> { cell };
+            stroke = new List<Vector2I>
+            {
+                cell
+            };
             strokeButton = button;
             RebuildMarks();
         }
 
         private void OnCellDragged(Vector2I cell, MouseButton button)
         {
-            if (DrawRouteCell(cell, button)) return;
+            if (DrawRouteCell(cell, button))
+            {
+                return;
+            }
+
             if (handleKind != RpgHandleKind.None)
             {
                 dragTo = cell;
                 RebuildMarks();
                 return;
             }
+
             if (tool == RpgEditorTool.Select && selectedId != null && dragOrigin != null)
             {
                 dragTo = cell;
                 RebuildMarks();
                 return;
             }
+
             if (boxFrom != null)
             {
                 boxTo = cell;
                 RebuildMarks();
                 return;
             }
+
             if (stroke != null && !stroke.Contains(cell))
             {
                 stroke.Add(cell);
@@ -965,20 +1286,34 @@ namespace Cthangover.Tools.RpgEditor
 
         private void OnCellReleased(Vector2I cell, MouseButton button)
         {
-            if (GodotObject.IsInstanceValid(routeDrawing)) return;
-            if (document == null)
+            if (GodotObject.IsInstanceValid(routeDrawing))
+            {
                 return;
+            }
+
+            if (document == null)
+            {
+                return;
+            }
+
             if (handleKind != RpgHandleKind.None)
             {
                 FinishHandle(cell);
                 return;
             }
+
             if (boxFrom != null)
             {
-                if (tool == RpgEditorTool.Event) { FinishEvent(); return; }
+                if (tool == RpgEditorTool.Event)
+                {
+                    FinishEvent();
+                    return;
+                }
+
                 FinishBox();
                 return;
             }
+
             if (stroke != null)
             {
                 var cells = stroke;
@@ -986,22 +1321,32 @@ namespace Cthangover.Tools.RpgEditor
                 stroke = null;
                 var changed = tool switch
                 {
-                    RpgEditorTool.Collision => document.PaintCollision(cells.Select(c => (c.X, c.Y)), erase ? RpgCollision.Open : collisionCode[0]),
-                    RpgEditorTool.Effects => document.PaintEffect(effectProfile, cells.Select(c => (c.X, c.Y)), erase),
+                    RpgEditorTool.Collision => document.PaintCollision(cells.Select(CellCoordinates),
+                        erase ? RpgCollision.Open : collisionCode[0]),
+                    RpgEditorTool.Effects => document.PaintEffect(effectProfile, cells.Select(CellCoordinates), erase),
                     _ => PaintCells(cells, erase),
                 };
                 if (changed)
+                {
                     AfterChange();
+                }
                 else
+                {
                     RebuildMarks();
+                }
+
                 return;
             }
+
             if (tool == RpgEditorTool.Select && cell.X >= 0 && cell.Y >= 0 && DragTarget(cell) is { } target)
             {
                 dragTo = null;
                 if (document.MovePlacement(selectedId, target.X, target.Y))
+                {
                     AfterChange();
+                }
             }
+
             dragOrigin = null;
             if (dragTo != null)
             {
@@ -1011,17 +1356,23 @@ namespace Cthangover.Tools.RpgEditor
         }
 
         /// <summary>
-        /// Where the dragged placement lands when the mouse is over <paramref name="cell"/>: its origin moves by the
+        /// Where the dragged placement lands when the mouse is over <paramref name = "cell"/>: its origin moves by the
         /// mouse's offset from the pressed cell, so an object held by any of its cells does not jump. Null when no
         /// placement is dragged or it would stay where it is.
         /// </summary>
         private Vector2I? DragTarget(Vector2I cell)
         {
             if (selectedId == null || dragOrigin is not { } origin || scene == null)
+            {
                 return null;
-            var at = scene.Editables.FirstOrDefault(p => p.Id == selectedId);
+            }
+
+            var at = scene.Editables.FirstOrDefault(IsSelectedEditable);
             if (at.Id == null)
+            {
                 return null;
+            }
+
             var target = RpgDragOffset.Landing(new Vector2I(at.X, at.Y), origin, cell);
             return target == new Vector2I(at.X, at.Y) ? null : target;
         }
@@ -1029,11 +1380,17 @@ namespace Cthangover.Tools.RpgEditor
         private bool PaintCells(IEnumerable<Vector2I> cells, bool erase)
         {
             var layer = brushForm == RpgObjectForm.Segment ? RpgStrokeLayer.Structure : RpgStrokeLayer.Ground;
-            var list = cells.Select(c => (c.X, c.Y));
+            var list = cells.Select(CellCoordinates);
             if (erase)
+            {
                 return document.Paint(layer, list, null);
+            }
+
             if (brushObject == null)
+            {
                 return false;
+            }
+
             return document.Paint(layer, list, brushObject);
         }
 
@@ -1044,6 +1401,7 @@ namespace Cthangover.Tools.RpgEditor
                 SetStatus(ToolUi.Tr("tools/rpg_editor/choose_first"), ToolStatusKind.Error);
                 return;
             }
+
             var local = placeObject.Split('/').Last().Replace(' ', '_');
             var id = document.AddPlacement("new_" + local, placeObject, cell.X, cell.Y);
             if (id == null)
@@ -1051,6 +1409,7 @@ namespace Cthangover.Tools.RpgEditor
                 SetStatus(ToolUi.Tr("tools/rpg_editor/refused"), ToolStatusKind.Error);
                 return;
             }
+
             selectedId = id;
             AfterChange();
         }
@@ -1064,7 +1423,10 @@ namespace Cthangover.Tools.RpgEditor
         private void RefreshSelection()
         {
             if (selectedId != null && (document == null || !document.SelectionIds.Contains(selectedId)))
+            {
                 selectedId = null;
+            }
+
             PruneMarked();
             RebuildMarks();
             RefreshInspector();
@@ -1088,40 +1450,60 @@ namespace Cthangover.Tools.RpgEditor
             boxFrom = selectedId == null ? cell : null;
             boxTo = boxFrom;
             if (selectedId != null)
+            {
                 SetStatus(PickedText(ordered), ToolStatusKind.Info);
+            }
+
             RefreshSelection();
         }
 
-        /// <summary>The placements of this map that cover a cell, with what the pick order needs: a picture-less marker, the origin is the cell.</summary>
+        /// <summary>
+        /// The placements of this map that cover a cell, with what the pick order needs: a picture-less marker,
+        /// the origin is the cell.
+        /// </summary>
         private List<(string Id, bool Marker, bool Origin)> CandidatesAt(Vector2I cell)
         {
             var result = new List<(string Id, bool Marker, bool Origin)>();
             if (scene == null)
+            {
                 return result;
+            }
+
             foreach (var (id, obj, x, y) in scene.Editables)
             {
                 if (cell.X < x || cell.Y < y || cell.X >= x + obj.Width || cell.Y >= y + obj.Height)
+                {
                     continue;
+                }
+
                 result.Add((id, RpgMarkers.IsPictureless(obj), x == cell.X && y == cell.Y));
             }
+
             return result;
         }
 
-        /// <summary>Makes the selected placement the one a drag from <paramref name="pressed"/> moves; its picture is the ghost.</summary>
+        /// <summary>
+        /// Makes the selected placement the one a drag from <paramref name = "pressed"/> moves; its picture is
+        /// the ghost.
+        /// </summary>
         private void GrabPlacement(Vector2I pressed)
         {
             dragOrigin = selectedId == null ? null : pressed;
             dragTo = null;
-            dragTexture = selectedId != null && scene?.ObjectOf(selectedId) is { } grabbed
-                ? RpgEditorPalette.ThumbnailOf(grabbed, textures.Image, textures.Charset)
-                : null;
+            canvas.GhostTexture = null;
+            dragTexture = textures.Preview("drag", selectedId != null ? scene?.ObjectOf(selectedId) : null);
         }
 
-        /// <summary>The status line for the selected placement; a stack of several says which one of how many it is.</summary>
+        /// <summary>
+        /// The status line for the selected placement; a stack of several says which one of how many it is.
+        /// </summary>
         private string PickedText(List<string> ordered)
         {
             if (ordered.Count <= 1)
+            {
                 return string.Format(ToolUi.Tr("tools/rpg_editor/picked"), selectedId);
+            }
+
             return string.Format(ToolUi.Tr("tools/rpg_editor/picked_cycle"), selectedId, ordered.IndexOf(selectedId) + 1, ordered.Count);
         }
 
@@ -1130,7 +1512,11 @@ namespace Cthangover.Tools.RpgEditor
         /// <summary>Rebuilds the scene from the document (after a change) and shows it.</summary>
         private void RebuildScene(bool refreshInspector = true)
         {
-            if (refreshInspector) previewBackdropId = null;
+            if (refreshInspector)
+            {
+                previewBackdropId = null;
+            }
+
             if (document == null)
             {
                 canvas?.Clear();
@@ -1138,14 +1524,19 @@ namespace Cthangover.Tools.RpgEditor
                 UpdateButtons();
                 return;
             }
-            scene = RpgEditorScene.From(document, id => objectTable.TryGetValue(id, out var o) ? o : null);
+
+            scene = RpgEditorScene.From(document, ObjectOf);
+            textures.BeginScene();
             var tileScene = builder.Build(scene.Map, scene.Cells, scene.Statics);
             canvas.Actors.Clear();
             foreach (var actor in scene.Actors)
             {
                 var look = builder.ActorLook(actor.Object, tileScene.TileSize);
                 if (look == null)
+                {
                     continue;
+                }
+
                 canvas.Actors.Add(new TileActorPose
                 {
                     Id = actor.Id,
@@ -1158,19 +1549,40 @@ namespace Cthangover.Tools.RpgEditor
                     Tint = Colors.White,
                 });
             }
+
             canvas.SetScene(tileScene);
             if (selectedId != null && !document.SelectionIds.Contains(selectedId))
+            {
                 selectedId = null;
+            }
+
             RebuildMarks();
-            if (refreshInspector) RefreshInspector();
-            else if (previewBackdropId != null) ShowBackdropPreview(scene.Statics);
+            if (refreshInspector)
+            {
+                RefreshInspector();
+            }
+            else if (previewBackdropId != null)
+            {
+                ShowBackdropPreview(scene.Statics);
+            }
+
+            textures.EndScene();
+            if (textures.PinnedBytes > textures.BudgetBytes)
+            {
+                SetHint(string.Format(ToolUi.Tr("tools/rpg_editor/active_texture_budget"), textures.PinnedBytes / 1048576d,
+                    textures.BudgetBytes / 1048576d));
+            }
+
             UpdateButtons();
         }
 
         private void RebuildMarks()
         {
             if (canvas == null)
+            {
                 return;
+            }
+
             var marks = canvas.Marks;
             marks.Clear();
             canvas.ResizeArea = null;
@@ -1183,40 +1595,62 @@ namespace Cthangover.Tools.RpgEditor
                 foreach (var (id, obj, x, y) in scene.Statics.Concat(scene.Events))
                 {
                     if (RpgMarkers.IsPictureless(obj))
+                    {
                         marks.Add(new CanvasRect(x, y, obj.Width, obj.Height, RpgMarkers.IsDoor(obj) ? DoorFill : MarkerFill, true));
+                    }
                 }
+
                 RpgEffectsLayer.AddMarks(scene.Map, marks);
                 foreach (var (id, obj, x, y) in scene.Editables)
                 {
                     if (marked.Contains(id))
+                    {
                         marks.Add(new CanvasRect(x, y, obj.Width, obj.Height, SelectFill, true));
+                    }
                 }
+
                 if (boxFrom is { } boxA && boxTo is { } boxB)
                 {
                     var bx = Math.Min(boxA.X, boxB.X);
                     var by = Math.Min(boxA.Y, boxB.Y);
                     marks.Add(new CanvasRect(bx, by, Math.Abs(boxA.X - boxB.X) + 1, Math.Abs(boxA.Y - boxB.Y) + 1, SelectFill, true));
                 }
+
                 if (selectedId != null && scene.ObjectOf(selectedId) is { } selected)
                 {
-                    var at = scene.Editables.FirstOrDefault(p => p.Id == selectedId);
+                    var at = scene.Editables.FirstOrDefault(IsSelectedEditable);
                     var bounds = resizePreview ?? new Rect2I(at.X, at.Y, selected.Width, selected.Height);
                     marks.Add(new CanvasRect(bounds.Position.X, bounds.Position.Y, bounds.Size.X, bounds.Size.Y, SelectFill, true));
                     marks.Add(new CanvasRect(bounds.Position.X, bounds.Position.Y, bounds.Size.X, bounds.Size.Y, HoverLine, false));
-                    if (tool == RpgEditorTool.Select && RpgMarkers.IsPictureless(selected)) canvas.ResizeArea = bounds;
+                    if (tool == RpgEditorTool.Select && RpgMarkers.IsPictureless(selected))
+                    {
+                        canvas.ResizeArea = bounds;
+                    }
                 }
+
                 if (scene.Map != null)
+                {
                     marks.Add(new CanvasRect(scene.Map.Spawn?.X ?? 0, scene.Map.Spawn?.Y ?? 0, 1, 1, SpawnFill, true));
+                }
+
                 if (tool == RpgEditorTool.Collision)
-                    RpgCollisionOverlay.AddMarks(scene, marks, stroke, strokeButton == MouseButton.Right ? RpgCollision.Open : collisionCode[0]);
+                {
+                    RpgCollisionOverlay.AddMarks(scene, marks, stroke,
+                        strokeButton == MouseButton.Right ? RpgCollision.Open : collisionCode[0]);
+                }
+
                 if (stroke != null && tool != RpgEditorTool.Collision)
                 {
-                    var fill = strokeButton == MouseButton.Right || (tool == RpgEditorTool.Collision && collisionCode == RpgCollision.Block.ToString()) ? EraseFill
-                        : tool == RpgEditorTool.Effects ? RpgEffectsLayer.MaskFill : PaintFill;
+                    var fill = strokeButton == MouseButton.Right || (tool == RpgEditorTool.Collision
+                        && collisionCode == RpgCollision.Block.ToString()) ? EraseFill
+                            : tool == RpgEditorTool.Effects ? RpgEffectsLayer.MaskFill : PaintFill;
                     foreach (var cell in stroke)
+                    {
                         marks.Add(new CanvasRect(cell.X, cell.Y, 1, 1, fill, true));
+                    }
                 }
             }
+
             canvas.GhostRect = null;
             canvas.GhostTexture = null;
             if (scene != null && hover is { } at2 && document != null)
@@ -1227,20 +1661,28 @@ namespace Cthangover.Tools.RpgEditor
                     canvas.GhostTexture = ghostTexture;
                     canvas.GhostTint = scene.Blocks(placing, at2.X, at2.Y) ? new Color(1f, 0.35f, 0.35f, 0.6f) : new Color(1, 1, 1, 0.6f);
                 }
-                else if (tool is RpgEditorTool.Paint or RpgEditorTool.Collision or RpgEditorTool.Spawn or RpgEditorTool.Place or RpgEditorTool.Effects or RpgEditorTool.Event)
+                else if (tool is RpgEditorTool.Paint or RpgEditorTool.Collision or RpgEditorTool.Spawn
+                    or RpgEditorTool.Place or RpgEditorTool.Effects or RpgEditorTool.Event)
                 {
                     marks.Add(new CanvasRect(at2.X, at2.Y, 1, 1, HoverLine, false));
                 }
             }
+
             // The ghost of a drag follows the mouse, so the move is not made blind: a placement or a door lands on its ghost,
             // a teleport handle shows the cell it would write (red when that cell is blocked or off the map, plan 14.G18).
             if (scene != null && dragTo is { } over && handleKind != RpgHandleKind.None)
             {
-                var blocked = RpgTeleportLinks.BrokenOf(new RpgTeleport { Map = document.MapId, X = over.X, Y = over.Y }, KnownMaps()) != null;
+                var blocked = RpgTeleportLinks.BrokenOf(new RpgTeleport
+                {
+                    Map = document.MapId,
+                    X = over.X,
+                    Y = over.Y
+                }, KnownMaps()) != null;
                 marks.Add(new CanvasRect(over.X, over.Y, 1, 1, blocked ? GhostBlocked : GhostFill, true));
                 marks.Add(new CanvasRect(over.X, over.Y, 1, 1, HoverLine, false));
             }
-            else if (scene != null && dragTo is { } moveOver && DragTarget(moveOver) is { } landing && scene.ObjectOf(selectedId) is { } moving)
+            else if (scene != null && dragTo is { } moveOver && DragTarget(moveOver) is { } landing
+                && scene.ObjectOf(selectedId) is { } moving)
             {
                 canvas.GhostRect = new CanvasRect(landing.X, landing.Y, moving.Width, moving.Height, Colors.White, false);
                 canvas.GhostTexture = dragTexture;
@@ -1248,6 +1690,7 @@ namespace Cthangover.Tools.RpgEditor
                 marks.Add(new CanvasRect(landing.X, landing.Y, moving.Width, moving.Height, GhostFill, true));
                 marks.Add(new CanvasRect(landing.X, landing.Y, moving.Width, moving.Height, HoverLine, false));
             }
+
             UpdateRouteOverlay();
             canvas.Refresh();
         }
@@ -1257,37 +1700,51 @@ namespace Cthangover.Tools.RpgEditor
             routePreview = null;
             routeDrawing = null;
             if (inspector == null)
-                return;
-            if (document == null || scene == null)
             {
-                inspector.Show(new RpgEditorInspector.State { Encounters = false });
                 return;
             }
+
+            if (document == null || scene == null)
+            {
+                inspector.Show(new RpgEditorInspector.State
+                {
+                    Encounters = false
+                });
+                return;
+            }
+
             var mapId = document.MapId;
-            var placements = document.Placements
-                .Where(r => RpgMapDocument.MapOfPlacement(r.Id) == mapId && !document.IsDeleted(r.Id))
-                .Select(r => RpgEditorScene.PlacementOf(r.Data))
-                .ToList();
+            var placements = new List<RpgPlacement>();
+            foreach (var record in document.Placements)
+            {
+                if (RpgMapDocument.MapOfPlacement(record.Id) == mapId && !document.IsDeleted(record.Id))
+                {
+                    placements.Add(RpgEditorScene.PlacementOf(record.Data));
+                }
+            }
+
             var maps = KnownMaps();
-            var outgoing = RpgTeleportLinks.Outgoing(mapId, placements, scene.Map, id => ObjectOf(id), maps);
-            var incoming = RpgTeleportLinks.Incoming(mapId, PlacementsBeyond(mapId, maps), id => ObjectOf(id));
-            if (arrivalId != null && incoming.All(l => l.Placement != arrivalId))
+            var outgoing = RpgTeleportLinks.Outgoing(mapId, placements, scene.Map, ObjectOf, maps);
+            var incoming = RpgTeleportLinks.Incoming(mapId, PlacementsBeyond(mapId, maps), ObjectOf);
+            if (arrivalId != null && incoming.All(IsNotArrival))
+            {
                 arrivalId = null;
+            }
+
             UpdateArrows(mapId, outgoing, incoming);
             var selectedObject = selectedId == null ? null : scene.ObjectOf(selectedId)?.ID;
             inspector.Show(new RpgEditorInspector.State
             {
                 Document = document,
                 Projection = canvas.Projection,
-                Backdrops = scene.Statics.Where(p => RpgBackdropEdit.Part(p.Object, canvas.Projection) != null)
-                    .Select(p => (p.Id, p.Object)).ToList(),
+                Backdrops = scene.Statics.Where(HasBackdrop).Select(BackdropEntry).ToList(),
                 Placement = selectedId,
-                Arrival = incoming.FirstOrDefault(l => l.Placement == arrivalId),
+                Arrival = incoming.FirstOrDefault(IsArrival),
                 ObjectId = selectedObject,
-                ScaleOf = id => scene?.ObjectOf(id)?.Scale ?? 1,
+                ScaleOf = CurrentScaleOf,
                 PictureScale = selectedId != null && document.EventOf(selectedId) == null
-                    && scene.ObjectOf(selectedId) is { } selectedPicture && !RpgMarkers.IsPictureless(selectedPicture)
-                    ? selectedPicture.Scale : null,
+                    && scene.ObjectOf(selectedId) is { } selectedPicture
+                    && !RpgMarkers.IsPictureless(selectedPicture) ? selectedPicture.Scale : null,
                 Route = selectedId == null ? null : scene.ObjectOf(selectedId)?.Route,
                 IsActor = selectedId != null && scene.ObjectOf(selectedId)?.Form == RpgObjectForm.Actor,
                 Outgoing = outgoing,
@@ -1305,7 +1762,10 @@ namespace Cthangover.Tools.RpgEditor
         private void UpdateButtons()
         {
             if (undoButton == null)
+            {
                 return;
+            }
+
             undoButton.Disabled = document == null || !document.CanUndo;
             redoButton.Disabled = document == null || !document.CanRedo;
             saveButton.Disabled = document == null;
@@ -1318,9 +1778,15 @@ namespace Cthangover.Tools.RpgEditor
         // ── keys ───────────────────────────────────────────────────
 
         /// <summary>Ctrl+S saves.</summary>
-        protected override void OnSaveShortcut() => Save();
+        protected override void OnSaveShortcut()
+        {
+            Save();
+        }
 
-        /// <summary>Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo, Delete removes the selected placement, Escape clears the selection.</summary>
+        /// <summary>
+        /// Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo, Delete removes the selected placement, Escape clears
+        /// the selection.
+        /// </summary>
         protected override bool HandleKey(InputEventKey key)
         {
             if (key.CtrlPressed)
@@ -1341,8 +1807,10 @@ namespace Cthangover.Tools.RpgEditor
                         PasteClipboard();
                         return true;
                 }
+
                 return false;
             }
+
             switch (key.Keycode)
             {
                 case Key.Delete when marked.Count > 0 || selectedId != null:
@@ -1368,8 +1836,166 @@ namespace Cthangover.Tools.RpgEditor
                     RefreshSelection();
                     return true;
             }
+
             return false;
         }
 
+        internal static VBoxContainer FillContainer()
+        {
+            return CreateFillContainer();
+        }
+
+        internal static HBoxContainer Toolbar()
+        {
+            return CreateToolbar();
+        }
+
+        internal static PanelContainer Sidebar(VBoxContainer content, int width)
+        {
+            return CreateSidebar(content, width);
+        }
+
+        private void OnToolButtonPressed(BaseButton button)
+        {
+            foreach (var pair in toolButtons)
+            {
+                if (pair.Value == button)
+                {
+                    SelectTool(pair.Key);
+                    return;
+                }
+            }
+        }
+
+        private void OnDeleteRequested(string id)
+        {
+            DeletePlacement(id);
+        }
+
+        private void OnSpawnRequested()
+        {
+            SelectTool(RpgEditorTool.Spawn);
+        }
+
+        private void OnEncountersChanged(JsonNode value)
+        {
+            ChangeProperty("Encounters", value);
+        }
+
+        private void OnSaveRequested()
+        {
+            Save();
+        }
+
+        private void OnUndoRequested()
+        {
+            Undo();
+        }
+
+        private void OnRedoRequested()
+        {
+            Redo();
+        }
+
+        private void OnFit()
+        {
+            canvas?.FitToView();
+        }
+
+        private void OnCollisionChoice(long index)
+        {
+            collisionCode = index switch
+            {
+                1 => "#",
+                2 => "o",
+                _ => "."
+            };
+        }
+
+        private void OnEffectChoice(long index)
+        {
+            effectProfile = effectPicker.GetItemMetadata((int)index).AsString();
+        }
+
+        private void OnProjectionChoice(long index)
+        {
+            SetProjection(index == 1 ? RpgEditorCanvas.Isometric : RpgEditorCanvas.TopDown);
+        }
+
+        private bool IsMarkedUnavailable(string id)
+        {
+            return document.IsDeleted(id) || !document.SelectionIds.Contains(id);
+        }
+
+        private static bool IsGameEntity((string Id, string OwnerMod, string File, JsonObject Written) row)
+        {
+            return !row.File.StartsWith(TestSuites, StringComparison.Ordinal);
+        }
+
+        private RpgObjectForm? ObjectFormOf(string id)
+        {
+            return ObjectOf(id)?.Form;
+        }
+
+        private bool IsCurrentMapFile((string Path, string Text) file)
+        {
+            return file.Path == mapPath;
+        }
+
+        private static (string Kind, string Id) ObjectReference(string id)
+        {
+            return ("rpg_object", id);
+        }
+
+        private static (int X, int Y) CellCoordinates(Vector2I cell)
+        {
+            return (cell.X, cell.Y);
+        }
+
+        private bool IsSelectedEditable((string Id, RpgObject Object, int X, int Y) placed)
+        {
+            return placed.Id == selectedId;
+        }
+
+        private bool IsNotArrival(RpgTeleportLink link)
+        {
+            return link.Placement != arrivalId;
+        }
+
+        private bool IsArrival(RpgTeleportLink link)
+        {
+            return link.Placement == arrivalId;
+        }
+
+        private bool HasBackdrop((string Id, RpgObject Object, int X, int Y) placed)
+        {
+            return RpgBackdropEdit.Part(placed.Object, canvas.Projection) != null;
+        }
+
+        private static (string Id, RpgObject Object) BackdropEntry((string Id, RpgObject Object, int X, int Y) placed)
+        {
+            return (placed.Id, placed.Object);
+        }
+
+        private float CurrentScaleOf(string id)
+        {
+            return scene?.ObjectOf(id)?.Scale ?? 1;
+        }
+
+        private void ConfirmOpen(string mod, string path)
+        {
+            var request = new RpgEditorOpenRequest(this, mod, path);
+            RunDiscardingChanges(request.Open, RestoreFileSelection);
+        }
+
+        internal void OpenConfirmed(string mod, string path)
+        {
+            OpenFile(mod, path);
+        }
+
+        private void RestoreFileSelection()
+        {
+            selector.Show(modId, mapPath);
+        }
     }
 }

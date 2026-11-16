@@ -83,6 +83,12 @@
       "activate": [
         "--itest=rpg_editor_catalog"
       ]
+    },
+    {
+      "id": "palette",
+      "activate": [
+        "--itest=rpg_palette_contracts"
+      ]
     }
   ],
   "integrations": [

@@ -1,14 +1,14 @@
+using Cthangover.Core.Characters;
+using Cthangover.Core.Events;
+using Cthangover.Core.Mods.Resolvers;
+using Cthangover.Mods.Interface.Tool;
+using Cthangover.Mods.Rpg;
+using Cthangover.Mods.Rpg.Model;
+using Cthangover.Tools.Common;
+using Cthangover.Tools.EntityEditor;
+
 namespace Cthangover.Tools.RpgEditor
 {
-    using Cthangover.Core.Characters;
-    using Cthangover.Core.Events;
-    using Cthangover.Core.Mods.Resolvers;
-    using Cthangover.Mods.Interface.Tool;
-    using Cthangover.Mods.Rpg;
-    using Cthangover.Mods.Rpg.Model;
-    using Cthangover.Tools.Common;
-    using Cthangover.Tools.EntityEditor;
-
     /// <summary>
     /// The characters tab of the palette (plan 14.G7): a chosen character is placed as its actor object, which is written
     /// into the map's mod first (<see cref="RpgCharacterActors"/>). The placement then works like any actor's: a join
@@ -28,11 +28,14 @@ namespace Cthangover.Tools.RpgEditor
         private void OnEntitiesSaved(EntitiesSavedEvent evt)
         {
             if (evt.Kind == CharacterKind)
-                palette?.RebuildCharacters(textures.Image, textures.Charset);
+            {
+                palette?.RebuildCharacters();
+            }
+
             if (evt.Kind == "rpg_object")
             {
                 objectTable = Entities.Collect<RpgObject>();
-                palette?.Rebuild(objectTable, textures.Image, textures.Charset);
+                palette?.Rebuild(objectTable);
                 RebuildScene();
             }
         }
@@ -40,18 +43,23 @@ namespace Cthangover.Tools.RpgEditor
         private void OnCharacterChosen(string characterId)
         {
             if (document == null)
+            {
                 return;
+            }
+
             if (document.IsForeign)
             {
                 SetStatus(ToolUi.Tr("tools/rpg_editor/refused"), ToolStatusKind.Error);
                 return;
             }
+
             var charset = RpgPlayerLook.CharsetOfId(characterId);
             if (charset == null)
             {
                 SetStatus(ToolUi.Tr("tools/rpg_editor/character_no_sheet"), ToolStatusKind.Error);
                 return;
             }
+
             var name = Entities.Collect<CharacterInfo>().TryGetValue(characterId, out var info) ? info?.Name : null;
             var objectId = RpgCharacterActors.Ensure(modId, characterId, charset, name);
             if (objectId == null)
@@ -59,11 +67,14 @@ namespace Cthangover.Tools.RpgEditor
                 SetStatus(ToolUi.Tr("tools/common/readonly"), ToolStatusKind.Error);
                 return;
             }
+
             objectTable = Entities.Collect<RpgObject>();
-            palette?.Rebuild(objectTable, textures.Image, textures.Charset);
+            palette?.Rebuild(objectTable);
             ChooseObject(objectId, RpgObjectForm.Actor);
             var joins = RpgCharacterActors.JoinsParty(modId, characterId);
-            SetStatus(string.Format(ToolUi.Tr(joins ? "tools/rpg_editor/character_chosen_joins" : "tools/rpg_editor/character_chosen"), characterId), ToolStatusKind.Ok);
+            SetStatus(string.Format(
+                ToolUi.Tr(joins ? "tools/rpg_editor/character_chosen_joins" : "tools/rpg_editor/character_chosen"),
+                characterId), ToolStatusKind.Ok);
         }
     }
 }
