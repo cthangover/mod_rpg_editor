@@ -1,0 +1,7 @@
+{
+  "id": "rpg_editor__depth_probe",
+  "name": "Geometry and walk-around contracts",
+  "test_sources": [
+    "tests/*.cs"
+  ]
+}

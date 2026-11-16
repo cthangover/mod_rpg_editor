@@ -1,0 +1,23 @@
+{
+  "Kind": "rpg_placement",
+  "Items": [
+    {
+      "Id": "geometry_fixture/desk",
+      "Object": "geometry_fixture/desk",
+      "X": 1,
+      "Y": 1
+    },
+    {
+      "Id": "geometry_fixture/tree",
+      "Object": "geometry_fixture/tree",
+      "X": 9,
+      "Y": 3
+    },
+    {
+      "Id": "geometry_fixture/wall",
+      "Object": "geometry_fixture/wall",
+      "X": 3,
+      "Y": 1
+    }
+  ]
+}

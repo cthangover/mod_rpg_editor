@@ -95,6 +95,12 @@
       "activate": [
         "--itest=rpg_editor_preview"
       ]
+    },
+    {
+      "id": "depth_probe",
+      "activate": [
+        "--itest=rpg_depth_probe_contracts"
+      ]
     }
   ],
   "integrations": [

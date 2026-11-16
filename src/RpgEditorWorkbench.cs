@@ -43,6 +43,8 @@ namespace Cthangover.Tools.RpgEditor
 
         internal RpgEditorCanvas Canvas { get; private set; }
 
+        internal RpgGeometryControls Geometry { get; private set; }
+
         internal RpgEditorInspector Inspector { get; private set; }
 
         internal ModFileSelector Selector { get; private set; }
@@ -97,6 +99,9 @@ namespace Cthangover.Tools.RpgEditor
             };
             toolbarScroll.AddChild(BuildToolbar());
             content.AddChild(toolbarScroll);
+            Geometry = new RpgGeometryControls();
+            content.AddChild(Geometry);
+            Geometry.EnsureConstructed();
             var main = new HSplitContainer
             {
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
@@ -122,7 +127,7 @@ namespace Cthangover.Tools.RpgEditor
             var scroll = new ScrollContainer
             {
                 SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-                HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+                HorizontalScrollMode = ScrollContainer.ScrollMode.Auto
             };
             Inspector = new RpgEditorInspector
             {

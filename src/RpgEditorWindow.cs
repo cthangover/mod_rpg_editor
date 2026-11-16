@@ -77,6 +77,8 @@ namespace Cthangover.Tools.RpgEditor
 
         private RpgStatePreview statePreview;
 
+        private RpgGeometryOverlay geometryOverlay;
+
         private readonly RpgRenderSceneBuilder builder;
 
         private readonly ButtonGroup toolGroup = new();
@@ -590,6 +592,7 @@ namespace Cthangover.Tools.RpgEditor
             ModEventBus.Unsubscribe<EntitiesSavedEvent>(OnEntitiesSaved);
             toolGroup.Pressed -= OnToolButtonPressed;
             DetachStatePreview();
+            geometryOverlay?.Retire();
             canvas?.Clear();
             if (canvas != null)
             {
@@ -617,6 +620,10 @@ namespace Cthangover.Tools.RpgEditor
                 view.EnsureConstructed();
                 palette = view.Palette;
                 canvas = view.Canvas;
+                geometryOverlay = new RpgGeometryOverlay(this, view.Geometry);
+                canvas.AddChild(geometryOverlay);
+                geometryOverlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+                geometryOverlay.EnsureConstructed();
                 inspector = view.Inspector;
                 selector = view.Selector;
                 projectionPicker = view.ProjectionPicker;
