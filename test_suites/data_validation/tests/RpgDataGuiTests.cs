@@ -100,6 +100,10 @@ namespace Cthangover.Tools.RpgEditor.Tests.DataValidation
                     ModAssert.Equal("validation_workshop/chest", window.SelectedId, "report selection uses ordinary map selection");
                     ModAssert.True(Named<CheckButton>("GeometryEnabled").ButtonPressed, "selection exposes actual object geometry");
                     ModAssert.True(Named<Label>("MapDataDetails").Text.Contains("Anchor"), "details explain the authored field");
+                    var context = ToolUi.Tr("tools/rpg_editor/data_placement");
+                    ModAssert.False(context == "tools/rpg_editor/data_placement", "the context caption has a real translation");
+                    ModAssert.True(Named<Label>("MapDataDetails").Text.Contains(context),
+                        "the known input layer is explained in the current ru/en language");
                     ModAssert.Equal(before, JsonSerializer.Serialize(window.Document.Placements),
                         "inspection never edits the invalid input");
                     await ToDraw();

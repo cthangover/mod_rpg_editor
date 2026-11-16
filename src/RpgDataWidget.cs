@@ -143,8 +143,37 @@ namespace Cthangover.Tools.RpgEditor
         private string Description(RpgDataIssue issue)
         {
             return issue.Resource + " · " + issue.Field + "\n" + RpgDataMessages.Explain(issue.Code)
-                + "\n" + issue.Detail + "\n" + issue.Source + "\n" + issue.Context
+                + "\n" + issue.Detail + "\n" + issue.Source + "\n" + ContextDescription(issue.Context)
                 + "\n" + string.Format(ToolUi.Tr("tools/rpg_editor/data_uses"), issue.Uses);
+        }
+
+        private static string ContextDescription(string context)
+        {
+            if (context == "authored")
+            {
+                return ToolUi.Tr("tools/rpg_editor/data_definition");
+            }
+
+            if (context == "authored placement")
+            {
+                return ToolUi.Tr("tools/rpg_editor/data_placement");
+            }
+
+            if (context == null || !context.StartsWith("variant:", StringComparison.Ordinal))
+            {
+                return context ?? "";
+            }
+
+            var state = context.IndexOf("/state:", StringComparison.Ordinal);
+            var variant = state < 0 ? context.Substring(8) : context.Substring(8, state - 8);
+            var text = variant.Length == 0 ? ToolUi.Tr("tools/rpg_editor/data_default")
+                : string.Format(ToolUi.Tr("tools/rpg_editor/data_variant"), variant);
+            if (state >= 0)
+            {
+                text += " · " + string.Format(ToolUi.Tr("tools/rpg_editor/data_state"), context.Substring(state + 7));
+            }
+
+            return text;
         }
 
         private void OnSelected(long index)

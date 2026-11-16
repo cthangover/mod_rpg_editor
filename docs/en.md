@@ -215,6 +215,24 @@ For playing a completed map, including left-click walking, see [RPG World](../..
 
 ![A placement of the elder's house selected with the Select tool: the barrel is filled in yellow, and the inspector shows its object, its id, that it is this map's own placement, its cell and the Remove button.](assets/rpg-editor-placement.jpg)
 
+## Check data and pictures before saving
+
+Expand **Data & images** in the right column and press **Check map data**. The report shows errors, warnings, checked resources and decoded pictures. It reads the open document, so you do not need to save the map first.
+
+![Complete audit of the teaching map in top-down view: no errors or warnings.](assets/iso2d-data-clean-topdown-en.png)
+
+Select a finding. The editor selects an available placement on the map and enables its geometry. Below the list are the field, explanation, known source, input layer and use count. Object definitions, placement input and effective variants or states are checked separately; the same field can have findings in several such contexts. **Object ↗** opens the ordinary object editor with its existing own-file and foreign-patch rules.
+
+**Save** automatically checks both projections before legend cleanup or file writes. An error opens the report and refuses the save. Your values, source files and undo history remain intact: correct the field or undo your edit, then save again. A warning alone does not prevent saving. Reachability checks under **Cell rules** remain separate.
+
+![An Anchor error stops saving while the selected chest and its geometry remain on the map.](assets/iso2d-data-error-isometric-en.png)
+
+Typical causes include a missing picture, Crop outside the picture, a wrong material size, incomplete anchor or part coordinates, a zero size, or malformed quad corners. Part positions and sizes use world cells; Crop uses image pixels. Negative and fractional offsets are valid. A quad needs four corners forming a nondegenerate parallelogram in three-dimensional coordinates; rotation and slant are valid. The audit does not straighten corners, rescale or overwrite an image.
+
+In the separate visual parts workspace, **Apply** checks the detached candidate before handing it back to the object. A refusal keeps the window and values available for correction. A successful Apply becomes one undo step in the parent editor, preserving unknown data fields.
+
+Editing the document marks the report stale. The audit runs no scenarios, changes no live game flags and does not simulate every combination of state conditions. Complete traversal supports maps up to **128×128**; exceeding the work budget explicitly marks the audit incomplete. This is a warning rather than a new map-format restriction.
+
 ## Saving and whose files change
 
 - **Save** (Ctrl+S) validates the map and its placements first. A problem stops the save, and the status line names it. Otherwise the editor writes only the files that changed, in the mod you chose.
