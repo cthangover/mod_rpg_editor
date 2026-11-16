@@ -119,6 +119,12 @@
       "activate": [
         "--itest=rpg_context_links_contracts"
       ]
+    },
+    {
+      "id": "data_validation",
+      "activate": [
+        "--itest=rpg_data_validation"
+      ]
     }
   ],
   "integrations": [

@@ -609,6 +609,7 @@ namespace Cthangover.Tools.RpgEditor
             }
 
             rulesWidget?.Retire();
+            ReleaseDataCheck();
             geometryOverlay?.Retire();
             canvas?.Clear();
             if (canvas != null)
@@ -640,6 +641,7 @@ namespace Cthangover.Tools.RpgEditor
                 rulesWidget = new RpgCellRulesWidget(this);
                 view.Diagnostics.AddChild(rulesWidget);
                 rulesWidget.EnsureConstructed();
+                InstallDataCheck(view.Diagnostics);
                 InstallStamps(view.Diagnostics);
                 InstallContext(view.Diagnostics);
                 geometryOverlay = new RpgGeometryOverlay(this, view.Geometry);

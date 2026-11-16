@@ -1,0 +1,24 @@
+{
+  "Kind": "rpg_map",
+  "Items": [
+    {
+      "Id": "validation_workshop",
+      "Width": 12,
+      "Height": 10,
+      "TileSize": 32,
+      "PatchSize": 128,
+      "Spawn": { "X": 6, "Y": 8 },
+      "Legend": {
+        "g": "village_pack/ground/grass",
+        "t": "village_pack/ground/town_paving"
+      },
+      "Ground": [
+        "ggggggtttttt", "ggggggtttttt", "ggggggtttttt", "ggggggtttttt", "ggggggtttttt",
+        "ggggggtttttt", "ggggggtttttt", "ggggggtttttt", "ggggggtttttt", "ggggggtttttt"
+      ],
+      "Events": [
+        { "Id": "note", "X": 4, "Y": 6, "Trigger": "Use", "Commands": ["end"] }
+      ]
+    }
+  ]
+}

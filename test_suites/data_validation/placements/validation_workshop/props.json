@@ -1,0 +1,8 @@
+{
+  "Kind": "rpg_placement",
+  "Items": [
+    { "Id": "validation_workshop/chest", "Object": "village_pack/chest", "X": 3, "Y": 7 },
+    { "Id": "validation_workshop/tree", "Object": "village_pack/vegetation/oak_small", "X": 2, "Y": 2 },
+    { "Id": "validation_workshop/sign", "Object": "village_pack/decor/sign", "X": 8, "Y": 7 }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Map data validation contracts and content inventory",
+  "test_sources": [
+    "tests/*.cs"
+  ],
+  "depends": [
+    "rpg_plus_game>=0.1.0",
+    "junior_reaper_paper_grief>=0.1.0"
+  ]
+}
