@@ -595,6 +595,7 @@ namespace Cthangover.Tools.RpgEditor
             toolGroup.Pressed -= OnToolButtonPressed;
             DetachStatePreview();
             ReleaseStamps();
+            ReleaseContext();
             if (GodotObject.IsInstanceValid(paintModePicker))
             {
                 paintModePicker.ItemSelected -= OnPaintModeChoice;
@@ -633,6 +634,7 @@ namespace Cthangover.Tools.RpgEditor
                 view.Diagnostics.AddChild(rulesWidget);
                 rulesWidget.EnsureConstructed();
                 InstallStamps(view.Diagnostics);
+                InstallContext(view.Diagnostics);
                 geometryOverlay = new RpgGeometryOverlay(this, view.Geometry);
                 canvas.AddChild(geometryOverlay);
                 geometryOverlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
@@ -1180,6 +1182,7 @@ namespace Cthangover.Tools.RpgEditor
             }
 
             palette?.Select(form, id);
+            RefreshContext();
             RebuildMarks();
         }
 
@@ -1742,6 +1745,7 @@ namespace Cthangover.Tools.RpgEditor
 
         private void RefreshInspector()
         {
+            RefreshContext();
             DetachStatePreview();
             routePreview = null;
             routeDrawing = null;

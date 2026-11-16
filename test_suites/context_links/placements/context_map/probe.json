@@ -1,0 +1,11 @@
+{
+  "Kind": "rpg_placement",
+  "Items": [
+    {
+      "Id": "context_map/sign",
+      "Object": "village_pack/decor/sign",
+      "X": 3,
+      "Y": 2
+    }
+  ]
+}

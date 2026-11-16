@@ -39,6 +39,12 @@ namespace Cthangover.Tools.RpgEditor
 
         private VBoxContainer content;
 
+        private ScrollContainer toolbarScroll;
+
+        private Button toolbarBack;
+
+        private Button toolbarForward;
+
         internal RpgEditorPalette Palette { get; private set; }
 
         internal RpgEditorCanvas Canvas { get; private set; }
@@ -96,7 +102,7 @@ namespace Cthangover.Tools.RpgEditor
             AddChild(content);
             content.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
             // Long translated toolbar labels must not push the Inspector outside the window.
-            var toolbarScroll = new ScrollContainer
+            toolbarScroll = new ScrollContainer
             {
                 Name = "RpgToolbarScroll",
                 HorizontalScrollMode = ScrollContainer.ScrollMode.Auto,
@@ -104,7 +110,29 @@ namespace Cthangover.Tools.RpgEditor
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             };
             toolbarScroll.AddChild(BuildToolbar());
-            content.AddChild(toolbarScroll);
+            var navigation = new HBoxContainer();
+            content.AddChild(navigation);
+            toolbarBack = new Button
+            {
+                Name = "ToolbarBack",
+                Text = "‹",
+                TooltipText = ToolUi.Tr("tools/rpg_editor/toolbar_back"),
+            };
+            navigation.AddChild(toolbarBack);
+            navigation.AddChild(toolbarScroll);
+            toolbarForward = new Button
+            {
+                Name = "ToolbarForward",
+                Text = "›",
+                TooltipText = ToolUi.Tr("tools/rpg_editor/toolbar_forward"),
+            };
+            navigation.AddChild(toolbarForward);
+            toolbarBack.Pressed += ScrollToolbarBack;
+            toolbarForward.Pressed += ScrollToolbarForward;
+            toolbarScroll.GetHScrollBar().Changed += UpdateToolbarNavigation;
+            toolbarScroll.GetHScrollBar().ValueChanged += OnToolbarScrolled;
+            toolbarScroll.Resized += UpdateToolbarNavigation;
+            UpdateToolbarNavigation();
             PaintOptions = BuildPaintOptions();
             content.AddChild(PaintOptions);
             Geometry = new RpgGeometryControls();
@@ -266,6 +294,30 @@ namespace Cthangover.Tools.RpgEditor
             }
         }
 
+        private void ScrollToolbarBack()
+        {
+            var bar = toolbarScroll.GetHScrollBar();
+            bar.Value -= Math.Max(32, bar.Page * 0.75);
+        }
+
+        private void ScrollToolbarForward()
+        {
+            var bar = toolbarScroll.GetHScrollBar();
+            bar.Value += Math.Max(32, bar.Page * 0.75);
+        }
+
+        private void OnToolbarScrolled(double value)
+        {
+            UpdateToolbarNavigation();
+        }
+
+        private void UpdateToolbarNavigation()
+        {
+            var bar = toolbarScroll.GetHScrollBar();
+            toolbarBack.Disabled = bar.Value <= bar.MinValue;
+            toolbarForward.Disabled = bar.Value >= bar.MaxValue - bar.Page;
+        }
+
         private static string Identity(string value)
         {
             return value;
@@ -273,6 +325,11 @@ namespace Cthangover.Tools.RpgEditor
 
         protected override void Destruct()
         {
+            toolbarBack.Pressed -= ScrollToolbarBack;
+            toolbarForward.Pressed -= ScrollToolbarForward;
+            toolbarScroll.GetHScrollBar().Changed -= UpdateToolbarNavigation;
+            toolbarScroll.GetHScrollBar().ValueChanged -= OnToolbarScrolled;
+            toolbarScroll.Resized -= UpdateToolbarNavigation;
             content.MinimumSizeChanged -= UpdateMinimum;
             base.Destruct();
         }

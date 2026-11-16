@@ -1,0 +1,6 @@
+{
+  "name": "Map context-link contracts",
+  "test_sources": [
+    "tests/*.cs"
+  ]
+}

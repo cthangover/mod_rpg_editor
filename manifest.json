@@ -113,6 +113,12 @@
       "activate": [
         "--itest=rpg_paint_regions_contracts"
       ]
+    },
+    {
+      "id": "context_links",
+      "activate": [
+        "--itest=rpg_context_links_contracts"
+      ]
     }
   ],
   "integrations": [
