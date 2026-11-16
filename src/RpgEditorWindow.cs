@@ -594,6 +594,7 @@ namespace Cthangover.Tools.RpgEditor
             ModEventBus.Unsubscribe<EntitiesSavedEvent>(OnEntitiesSaved);
             toolGroup.Pressed -= OnToolButtonPressed;
             DetachStatePreview();
+            ReleaseStamps();
             if (GodotObject.IsInstanceValid(paintModePicker))
             {
                 paintModePicker.ItemSelected -= OnPaintModeChoice;
@@ -631,6 +632,7 @@ namespace Cthangover.Tools.RpgEditor
                 rulesWidget = new RpgCellRulesWidget(this);
                 view.Diagnostics.AddChild(rulesWidget);
                 rulesWidget.EnsureConstructed();
+                InstallStamps(view.Diagnostics);
                 geometryOverlay = new RpgGeometryOverlay(this, view.Geometry);
                 canvas.AddChild(geometryOverlay);
                 geometryOverlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
@@ -764,6 +766,7 @@ namespace Cthangover.Tools.RpgEditor
             modId = mod;
             mapPath = path;
             document = opened.Value.Document;
+            RefreshStamps();
             isNewMap = opened.Value.New;
             selectedId = null;
             SetTool(RpgEditorTool.Select);
