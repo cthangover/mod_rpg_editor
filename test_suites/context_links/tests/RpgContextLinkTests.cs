@@ -216,7 +216,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.ContextLinks
 
         private static EntityEditorWindow FindEntity(string id)
         {
-            foreach (var child in ((SceneTree)Engine.GetMainLoop()).Root.GetChildren())
+            foreach (var child in ((SceneTree)Godot.Engine.GetMainLoop()).Root.GetChildren())
             {
                 if (child is EntityEditorWindow editor && editor.SelectedId == id)
                 {
@@ -230,7 +230,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.ContextLinks
         private static List<Window> RootWindows()
         {
             var result = new List<Window>();
-            foreach (var child in ((SceneTree)Engine.GetMainLoop()).Root.GetChildren())
+            foreach (var child in ((SceneTree)Godot.Engine.GetMainLoop()).Root.GetChildren())
             {
                 if (child is Window window)
                 {
@@ -281,13 +281,13 @@ namespace Cthangover.Tools.RpgEditor.Tests.ContextLinks
             }
 
             Directory.CreateDirectory(folder);
-            ModAssert.True(ViewportCapture.SavePng(((SceneTree)Engine.GetMainLoop()).Root,
+            ModAssert.True(ViewportCapture.SavePng(((SceneTree)Godot.Engine.GetMainLoop()).Root,
                 Path.Combine(folder, name + ".png")), "context capture uses the shared colour pipeline");
         }
 
         private static async Task Frames(int count)
         {
-            var tree = (SceneTree)Engine.GetMainLoop();
+            var tree = (SceneTree)Godot.Engine.GetMainLoop();
             for (var frame = 0; frame < count; frame++)
             {
                 await tree.ToSignal(tree, SceneTree.SignalName.ProcessFrame);

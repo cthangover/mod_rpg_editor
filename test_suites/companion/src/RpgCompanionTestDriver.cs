@@ -427,7 +427,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
         // Advances the shell's dialog-free path: the prologue's choices take their first answer.
         private static bool SkipPrologue()
         {
-            var scene = ((SceneTree)Engine.GetMainLoop()).Root.GetNodeOrNull<SceneManager>("SceneManager")?.CurrentSceneName;
+            var scene = ((SceneTree)Godot.Engine.GetMainLoop()).Root.GetNodeOrNull<SceneManager>("SceneManager")?.CurrentSceneName;
             if (string.IsNullOrEmpty(scene) || RpgWorldHost.Current?.View?.Map != null)
                 return false;
             var box = RpgInput.FindDialogBox();

@@ -31,7 +31,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.Palette
             };
             var palette = new RpgEditorPalette(objects, images);
             // Native tab-change signals require a live scene-tree host, as in the real tool window.
-            ((SceneTree)Engine.GetMainLoop()).Root.AddChild(palette);
+            ((SceneTree)Godot.Engine.GetMainLoop()).Root.AddChild(palette);
             try
             {
                 palette.EnsureConstructed();

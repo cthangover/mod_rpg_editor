@@ -174,7 +174,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.Preview
 
         private async Task Frames()
         {
-            var tree = (SceneTree)Engine.GetMainLoop();
+            var tree = (SceneTree)Godot.Engine.GetMainLoop();
             for (var index = 0; index < 5; index++)
             {
                 await tree.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
@@ -191,7 +191,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.Preview
 
         private (int Red, int Blue) PixelCounts()
         {
-            var root = ((SceneTree)Engine.GetMainLoop()).Root;
+            var root = ((SceneTree)Godot.Engine.GetMainLoop()).Root;
             using var image = ViewportCapture.Take(root);
             ModAssert.NotNull(image, "native viewport capture succeeds");
             ModAssert.True(image.GetFormat() == Image.Format.Rgba8, "capture exposes displayed RGBA8 pixels");
@@ -232,7 +232,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.Preview
             }
 
             Directory.CreateDirectory(output);
-            ModAssert.True(ViewportCapture.SavePng(((SceneTree)Engine.GetMainLoop()).Root,
+            ModAssert.True(ViewportCapture.SavePng(((SceneTree)Godot.Engine.GetMainLoop()).Root,
                 Path.Combine(output, locale + "_" + name + ".png")), "preview capture writes through the shared colour pipeline");
         }
 

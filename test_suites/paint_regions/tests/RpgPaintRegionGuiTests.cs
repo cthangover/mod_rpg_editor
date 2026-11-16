@@ -281,13 +281,13 @@ namespace Cthangover.Tools.RpgEditor.Tests.PaintRegions
             }
 
             Directory.CreateDirectory(folder);
-            ModAssert.True(ViewportCapture.SavePng(((SceneTree)Engine.GetMainLoop()).Root,
+            ModAssert.True(ViewportCapture.SavePng(((SceneTree)Godot.Engine.GetMainLoop()).Root,
                 Path.Combine(folder, name + ".png")), "native capture uses the shared colour pipeline");
         }
 
         private static async Task Frames(int count)
         {
-            var tree = (SceneTree)Engine.GetMainLoop();
+            var tree = (SceneTree)Godot.Engine.GetMainLoop();
             for (var frame = 0; frame < count; frame++)
             {
                 await tree.ToSignal(tree, SceneTree.SignalName.ProcessFrame);

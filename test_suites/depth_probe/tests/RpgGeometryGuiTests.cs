@@ -178,7 +178,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.DepthProbe
 
         private static async Task Frames(int count)
         {
-            var tree = (SceneTree)Engine.GetMainLoop();
+            var tree = (SceneTree)Godot.Engine.GetMainLoop();
             for (var index = 0; index < count; index++)
             {
                 await tree.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
@@ -194,7 +194,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.DepthProbe
             }
 
             Directory.CreateDirectory(output);
-            ModAssert.True(ViewportCapture.SavePng(((SceneTree)Engine.GetMainLoop()).Root,
+            ModAssert.True(ViewportCapture.SavePng(((SceneTree)Godot.Engine.GetMainLoop()).Root,
                 Path.Combine(output, locale + "_" + name + ".png")), "geometry capture uses the shared colour pipeline");
         }
     }
