@@ -107,6 +107,12 @@
       "activate": [
         "--itest=rpg_cell_rules_contracts"
       ]
+    },
+    {
+      "id": "paint_regions",
+      "activate": [
+        "--itest=rpg_paint_regions_contracts"
+      ]
     }
   ],
   "integrations": [

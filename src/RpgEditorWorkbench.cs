@@ -55,6 +55,10 @@ namespace Cthangover.Tools.RpgEditor
 
         internal OptionButton CollisionPicker { get; private set; }
 
+        internal OptionButton PaintModePicker { get; private set; }
+
+        internal Control PaintOptions { get; private set; }
+
         internal OptionButton EffectPicker { get; private set; }
 
         internal Button PlayButton { get; private set; }
@@ -101,6 +105,8 @@ namespace Cthangover.Tools.RpgEditor
             };
             toolbarScroll.AddChild(BuildToolbar());
             content.AddChild(toolbarScroll);
+            PaintOptions = BuildPaintOptions();
+            content.AddChild(PaintOptions);
             Geometry = new RpgGeometryControls();
             content.AddChild(Geometry);
             Geometry.EnsureConstructed();
@@ -142,6 +148,29 @@ namespace Cthangover.Tools.RpgEditor
             main.AddChild(RpgEditorWindow.Sidebar(right, 320));
             content.MinimumSizeChanged += UpdateMinimum;
             UpdateMinimum();
+        }
+
+        private HBoxContainer BuildPaintOptions()
+        {
+            var row = new HBoxContainer
+            {
+                Name = "PaintOptions",
+                Visible = false,
+            };
+            row.AddChild(new Label
+            {
+                Text = ToolUi.Tr("tools/rpg_editor/paint_mode_label"),
+            });
+            PaintModePicker = new OptionButton
+            {
+                Name = "PaintMode",
+                TooltipText = ToolUi.Tr("tools/rpg_editor/paint_mode_tip"),
+            };
+            PaintModePicker.AddItem(ToolUi.Tr("tools/rpg_editor/paint_brush"), (int)RpgPaintMode.Brush);
+            PaintModePicker.AddItem(ToolUi.Tr("tools/rpg_editor/paint_fill"), (int)RpgPaintMode.Fill);
+            PaintModePicker.Select(0);
+            row.AddChild(PaintModePicker);
+            return row;
         }
 
         private HBoxContainer BuildToolbar()

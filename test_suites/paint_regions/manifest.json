@@ -1,0 +1,4 @@
+{
+  "name": "Authoring paint-region contracts",
+  "test_sources": ["tests/*.cs"]
+}

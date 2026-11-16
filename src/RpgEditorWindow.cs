@@ -594,6 +594,11 @@ namespace Cthangover.Tools.RpgEditor
             ModEventBus.Unsubscribe<EntitiesSavedEvent>(OnEntitiesSaved);
             toolGroup.Pressed -= OnToolButtonPressed;
             DetachStatePreview();
+            if (GodotObject.IsInstanceValid(paintModePicker))
+            {
+                paintModePicker.ItemSelected -= OnPaintModeChoice;
+            }
+
             rulesWidget?.Retire();
             geometryOverlay?.Retire();
             canvas?.Clear();
@@ -634,6 +639,9 @@ namespace Cthangover.Tools.RpgEditor
                 selector = view.Selector;
                 projectionPicker = view.ProjectionPicker;
                 collisionPicker = view.CollisionPicker;
+                paintModePicker = view.PaintModePicker;
+                paintOptions = view.PaintOptions;
+                paintModePicker.ItemSelected += OnPaintModeChoice;
                 effectPicker = view.EffectPicker;
                 playButton = view.PlayButton;
                 undoButton = view.UndoButton;
@@ -1122,6 +1130,10 @@ namespace Cthangover.Tools.RpgEditor
         private void SetTool(RpgEditorTool next)
         {
             tool = next;
+            if (paintModePicker != null)
+            {
+                paintOptions.Visible = next is RpgEditorTool.Paint or RpgEditorTool.Collision;
+            }
             stroke = null;
             dragOrigin = null;
             dragTo = null;
@@ -1257,10 +1269,7 @@ namespace Cthangover.Tools.RpgEditor
 
         private void BeginStroke(Vector2I cell, MouseButton button)
         {
-            stroke = new List<Vector2I>
-            {
-                cell
-            };
+            stroke = StrokeCells(cell, button);
             strokeButton = button;
             RebuildMarks();
         }
@@ -1290,6 +1299,11 @@ namespace Cthangover.Tools.RpgEditor
             {
                 boxTo = cell;
                 RebuildMarks();
+                return;
+            }
+
+            if (paintMode == RpgPaintMode.Fill && (tool is RpgEditorTool.Paint or RpgEditorTool.Collision))
+            {
                 return;
             }
 

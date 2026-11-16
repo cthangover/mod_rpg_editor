@@ -1,0 +1,62 @@
+{
+  "Kind": "rpg_map",
+  "Items": [
+    {
+      "Id": "rpg_fill_fixture",
+      "Width": 8,
+      "Height": 6,
+      "TileSize": 32,
+      "Spawn": {
+        "X": 1,
+        "Y": 1
+      },
+      "Legend": {
+        "g": "village_pack/ground/grass",
+        "t": "village_pack/ground/town_paving"
+      },
+      "Ground": [
+        "ggggtttt",
+        "ggggtttt",
+        "ggggtttt",
+        "ggggtttt",
+        "ggggtttt",
+        "ggggtttt"
+      ],
+      "Structure": [
+        "........",
+        "........",
+        "........",
+        "........",
+        "........",
+        "........"
+      ],
+      "Collision": [
+        "........",
+        "........",
+        "........",
+        "........",
+        "........",
+        "........"
+      ],
+      "AuthorData": {
+        "keep": [
+          1,
+          2,
+          3
+        ]
+      },
+      "Events": [
+        {
+          "Id": "marker",
+          "X": 1,
+          "Y": 1,
+          "Trigger": "Use",
+          "Commands": [
+            "flag self.seen 1",
+            "end"
+          ]
+        }
+      ]
+    }
+  ]
+}
