@@ -164,10 +164,11 @@ namespace Cthangover.Tools.RpgEditor
             PaintModePicker = new OptionButton
             {
                 Name = "PaintMode",
-                TooltipText = ToolUi.Tr("tools/rpg_editor/paint_mode_tip"),
+                TooltipText = ToolUi.Tr("tools/rpg_editor/paint_modes_tip"),
             };
             PaintModePicker.AddItem(ToolUi.Tr("tools/rpg_editor/paint_brush"), (int)RpgPaintMode.Brush);
             PaintModePicker.AddItem(ToolUi.Tr("tools/rpg_editor/paint_fill"), (int)RpgPaintMode.Fill);
+            PaintModePicker.AddItem(ToolUi.Tr("tools/rpg_editor/paint_rectangle"), (int)RpgPaintMode.Rectangle);
             PaintModePicker.Select(0);
             row.AddChild(PaintModePicker);
             return row;

@@ -137,6 +137,68 @@ namespace Cthangover.Tools.RpgEditor.Tests.PaintRegions
             ModAssert.Equal(48, emptyStructure.Cells.Count, "structure fill follows its own layer, independently of ground and collision");
         }
 
+        [ModTest("paint_regions/rectangle_clipping_order_budget_and_transactions")]
+        static void Rectangles(ModTestContext ctx)
+        {
+            var ownership = new[] { false, true };
+            foreach (var foreign in ownership)
+            {
+                var document = new RpgPaintFixture(ctx, foreign: foreign).Document;
+                var before = document.Data.ToJsonString();
+                var region = RpgPaintRegion.Rectangle(document, new Vector2I(4, 3), new Vector2I(2, 1));
+                ModAssert.True(region.Complete, "a reversed rectangle is complete");
+                ModAssert.Equal(9, region.Cells.Count, "both corner cells belong to the rectangle");
+                ModAssert.True(region.Cells[0] == new Vector2I(2, 1), "clipped rectangle starts at its top-left");
+                ModAssert.True(region.Cells[8] == new Vector2I(4, 3), "clipped rectangle ends at its bottom-right");
+                ModAssert.True(region.Cells[3] == new Vector2I(2, 2), "rectangle enumeration is stable row order");
+                ModAssert.Equal(before, document.Data.ToJsonString(), "discovery does not write a map");
+                ModAssert.False(document.CanUndo, "rectangle discovery creates no history");
+                ModAssert.True(document.Paint(RpgStrokeLayer.Ground, RpgPaintFixture.Coordinates(region), Water),
+                    "rectangle commits through the ordinary batch contract");
+                for (var y = 0; y < document.Height; y++)
+                {
+                    for (var x = 0; x < document.Width; x++)
+                    {
+                        var expected = x >= 2 && x <= 4 && y >= 1 && y <= 3 ? Water
+                            : x < 4 ? "village_pack/ground/grass" : "village_pack/ground/town_paving";
+                        ModAssert.Equal(expected, document.ObjectAt(RpgStrokeLayer.Ground, x, y),
+                            "rectangle crosses material boundaries without touching outside cells");
+                    }
+                }
+
+                ModAssert.True(document.Undo(), "one undo removes all rectangle cells");
+                ModAssert.Equal(before, document.Data.ToJsonString(), "own and foreign undo restore exact JSON");
+                ModAssert.False(document.CanUndo, "rectangle remains a single transaction");
+                ModAssert.Equal(0, document.Changes().Count, "rectangle undo leaves no file or patch changes");
+                var clipped = RpgPaintRegion.Rectangle(document, new Vector2I(int.MinValue, int.MinValue),
+                    new Vector2I(int.MaxValue, int.MaxValue));
+                ModAssert.True(clipped.Complete && clipped.Cells.Count == 48, "extreme corners clip without integer overflow");
+                ModAssert.Equal(0, RpgPaintRegion.Rectangle(document, new Vector2I(-5, -5), new Vector2I(-1, -1)).Cells.Count,
+                    "fully outside rectangle is empty");
+                ModAssert.Equal(1, RpgPaintRegion.Rectangle(document, Vector2I.One, Vector2I.One).Cells.Count,
+                    "one-cell rectangle remains paintable");
+            }
+
+            ModAssert.Equal(0, RpgPaintRegion.Rectangle(null, Vector2I.Zero, Vector2I.One).Cells.Count,
+                "absent document has no rectangle");
+            var source = new RpgPaintFixture(ctx).Document.Data.DeepClone() as JsonObject;
+            source["Width"] = 129;
+            source["Height"] = 128;
+            source["Legend"] = new JsonObject();
+            source.Remove("Ground");
+            source.Remove("Structure");
+            source.Remove("Collision");
+            var large = new RpgPaintFixture(ctx, source).Document;
+            var original = large.Data.ToJsonString();
+            var over = RpgPaintRegion.Rectangle(large, Vector2I.Zero, new Vector2I(128, 127));
+            ModAssert.False(over.Complete, "rectangle budget is checked before exposing cells");
+            ModAssert.Equal(0, over.Cells.Count, "oversize rectangle cannot commit a partial result");
+            ModAssert.Equal(original, large.Data.ToJsonString(), "budget rejection preserves source data");
+            ModAssert.False(large.CanUndo, "budget rejection creates no undo transaction");
+            var exact = RpgPaintRegion.Rectangle(large, Vector2I.Zero, new Vector2I(127, 127));
+            ModAssert.True(exact.Complete && exact.Cells.Count == 16384, "128 by128 rectangle remains supported");
+        }
+
         [ModTest("paint_regions/budget_absent_bounds_and_invalid_layer")]
         static void Limits(ModTestContext ctx)
         {

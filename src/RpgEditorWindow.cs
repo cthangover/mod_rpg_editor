@@ -1307,6 +1307,11 @@ namespace Cthangover.Tools.RpgEditor
                 return;
             }
 
+            if (UpdateRectangle(cell))
+            {
+                return;
+            }
+
             if (stroke != null && !stroke.Contains(cell))
             {
                 stroke.Add(cell);
@@ -1344,6 +1349,7 @@ namespace Cthangover.Tools.RpgEditor
                 return;
             }
 
+            UpdateRectangle(cell);
             if (stroke != null)
             {
                 var cells = stroke;

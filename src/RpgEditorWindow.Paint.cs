@@ -13,13 +13,15 @@ namespace Cthangover.Tools.RpgEditor
     {
         private RpgPaintMode paintMode;
 
+        private Vector2I strokeOrigin;
+
         private OptionButton paintModePicker;
 
         private Control paintOptions;
 
         private void OnPaintModeChoice(long index)
         {
-            if (index < 0 || index > (long)RpgPaintMode.Fill)
+            if (index < 0 || index > (long)RpgPaintMode.Rectangle)
             {
                 return;
             }
@@ -31,7 +33,8 @@ namespace Cthangover.Tools.RpgEditor
 
         private List<Vector2I> StrokeCells(Vector2I cell, MouseButton button)
         {
-            if (paintMode != RpgPaintMode.Fill || tool is not (RpgEditorTool.Paint or RpgEditorTool.Collision))
+            strokeOrigin = cell;
+            if (paintMode == RpgPaintMode.Brush || tool is not (RpgEditorTool.Paint or RpgEditorTool.Collision))
             {
                 return new List<Vector2I> { cell };
             }
@@ -44,7 +47,8 @@ namespace Cthangover.Tools.RpgEditor
 
             var layer = tool == RpgEditorTool.Collision ? RpgStrokeLayer.Collision
                 : brushForm == RpgObjectForm.Segment ? RpgStrokeLayer.Structure : RpgStrokeLayer.Ground;
-            var region = RpgPaintRegion.Fill(document, layer, cell);
+            var region = paintMode == RpgPaintMode.Rectangle ? RpgPaintRegion.Rectangle(document, cell, cell)
+                : RpgPaintRegion.Fill(document, layer, cell);
             if (!region.Complete)
             {
                 SetStatus(ToolUi.Tr("tools/rpg_editor/paint_fill_budget"), ToolStatusKind.Error);
@@ -52,6 +56,24 @@ namespace Cthangover.Tools.RpgEditor
             }
 
             return new List<Vector2I>(region.Cells);
+        }
+        private bool UpdateRectangle(Vector2I cell)
+        {
+            if (stroke == null || paintMode != RpgPaintMode.Rectangle
+                || tool is not (RpgEditorTool.Paint or RpgEditorTool.Collision))
+            {
+                return false;
+            }
+
+            var region = RpgPaintRegion.Rectangle(document, strokeOrigin, cell);
+            stroke = region.Complete ? new List<Vector2I>(region.Cells) : null;
+            if (!region.Complete)
+            {
+                SetStatus(ToolUi.Tr("tools/rpg_editor/paint_rectangle_budget"), ToolStatusKind.Error);
+            }
+
+            RebuildMarks();
+            return true;
         }
     }
 }

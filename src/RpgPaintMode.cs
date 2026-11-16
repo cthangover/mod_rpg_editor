@@ -8,5 +8,8 @@ namespace Cthangover.Tools.RpgEditor
 
         /// <summary>The first cell selects a complete equal-value cardinal component, committed on release.</summary>
         Fill,
+
+        /// <summary>Both corners bound an inclusive clipped area; release commits the entire rectangle.</summary>
+        Rectangle,
     }
 }

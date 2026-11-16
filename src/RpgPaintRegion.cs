@@ -6,7 +6,7 @@ using Godot;
 namespace Cthangover.Tools.RpgEditor
 {
     /// <summary>
-    /// Read-only authoring regions, independent of gameplay collision and placement occupancy.
+    /// Read-only fill and rectangle authoring regions, independent of gameplay collision and placement occupancy.
     /// A fill follows equal resolved authored values in four directions. Budget exhaustion returns
     /// no cells, so a caller cannot accidentally commit a partial fill as a successful gesture.
     /// </summary>
@@ -73,6 +73,44 @@ namespace Cthangover.Tools.RpgEditor
                     {
                         pending.Enqueue(next);
                     }
+                }
+            }
+
+            return new RpgPaintRegion(true, result);
+        }
+
+        /// <summary>
+        /// Returns the inclusive rectangle between two corners, clipped to the document, in row order.
+        /// Reversed or outside corners are accepted. An area above 16,384 cells returns no cells and
+        /// Complete=false; discovery never changes JSON or history, including on budget failure.
+        /// </summary>
+        public static RpgPaintRegion Rectangle(RpgMapDocument document, Vector2I first, Vector2I last)
+        {
+            var result = new List<Vector2I>();
+            if (document == null)
+            {
+                return new RpgPaintRegion(true, result);
+            }
+
+            var left = Math.Max(0, Math.Min(first.X, last.X));
+            var top = Math.Max(0, Math.Min(first.Y, last.Y));
+            var right = Math.Min(document.Width - 1, Math.Max(first.X, last.X));
+            var bottom = Math.Min(document.Height - 1, Math.Max(first.Y, last.Y));
+            if (right < left || bottom < top)
+            {
+                return new RpgPaintRegion(true, result);
+            }
+
+            if (((long)right - left + 1) * ((long)bottom - top + 1) > CellBudget)
+            {
+                return new RpgPaintRegion(false, result);
+            }
+
+            for (var y = top; y <= bottom; y++)
+            {
+                for (var x = left; x <= right; x++)
+                {
+                    result.Add(new Vector2I(x, y));
                 }
             }
 
