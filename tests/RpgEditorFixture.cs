@@ -52,7 +52,7 @@ namespace Cthangover.Tools.RpgEditor.Tests
       ""Height"": 3,
       ""Legend"": {""g"": ""village_pack/ground/grass"", ""f"": ""village_pack/structure/fence_wood""},
       ""Ground"": [""gggg"", ""gggg"", ""gggg""],
-      ""Structure"": [""f..."", ""...."", ""...""],
+      ""Structure"": [""f..."", ""...."", ""....""],
       ""Collision"": [""...."", ""..#o"", ""....""]
     }
   ]
