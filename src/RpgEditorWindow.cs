@@ -936,6 +936,11 @@ namespace Cthangover.Tools.RpgEditor
                 return false;
             }
 
+            if (!ValidateDataBeforeSave())
+            {
+                return false;
+            }
+
             var files = document.Changes();
             if (isNewMap)
             {

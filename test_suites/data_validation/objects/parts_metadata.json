@@ -1,0 +1,44 @@
+{
+  "Kind": "rpg_object",
+  "Items": [
+    {
+      "Id": "rpg_editor__data_validation/parts_metadata",
+      "Form": "sprite",
+      "Category": "container",
+      "Anchor": [
+        0.5,
+        1
+      ],
+      "F11Extra": {
+        "keep": 42
+      },
+      "Parts": [
+        {
+          "Image": "container/chest_closed",
+          "Size": [
+            1,
+            1
+          ],
+          "F11Extra": {
+            "role": "legacy"
+          }
+        },
+        {
+          "Id": "upper",
+          "Image": "container/chest_closed",
+          "At": [
+            0,
+            -1
+          ],
+          "Size": [
+            1,
+            1
+          ],
+          "F11Extra": {
+            "role": "named"
+          }
+        }
+      ]
+    }
+  ]
+}

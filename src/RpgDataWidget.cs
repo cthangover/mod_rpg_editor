@@ -103,22 +103,35 @@ namespace Cthangover.Tools.RpgEditor
             }
         }
 
-        internal void Show(RpgMapDataReport value)
+        internal void Show(RpgMapDataReport value, bool reveal = false)
         {
             EnsureConstructed();
+            if (reveal)
+            {
+                toggle.ButtonPressed = true;
+            }
+
             report = value;
             seen = host.Scene;
             rows.Clear();
             details.Text = "";
+            var errors = 0;
             foreach (var issue in report.Issues)
             {
-                rows.AddItem(issue.Code + ": " + issue.Resource + " · " + issue.Field);
+                var blocking = RpgDataPolicy.Blocks(issue.Code);
+                if (blocking)
+                {
+                    errors++;
+                }
+
+                var severity = ToolUi.Tr(blocking ? "tools/rpg_editor/data_error" : "tools/rpg_editor/data_warning");
+                rows.AddItem(severity + " · " + issue.Resource + " · " + issue.Field);
                 rows.SetItemTooltip(rows.ItemCount - 1, Description(issue));
             }
 
             rows.Visible = rows.ItemCount > 0;
             summary.Text = string.Format(ToolUi.Tr("tools/rpg_editor/data_summary"),
-                report.Issues.Count, report.ObjectsChecked, report.ImagesDecoded);
+                errors, report.Issues.Count - errors, report.ObjectsChecked, report.ImagesDecoded);
             if (!report.Complete)
             {
                 summary.Text += "\n" + ToolUi.Tr("tools/rpg_editor/data_incomplete");

@@ -1,4 +1,6 @@
 using Cthangover.Mods.Rpg.Validation;
+using Cthangover.Mods.Interface.Tool;
+using Cthangover.Tools.Common;
 using Godot;
 
 namespace Cthangover.Tools.RpgEditor
@@ -23,6 +25,31 @@ namespace Cthangover.Tools.RpgEditor
                 : RpgMapDataAudit.Check(document, canvas.Projection, ObjectOf);
             dataWidget?.Show(report);
             return report;
+        }
+
+        private bool ValidateDataBeforeSave()
+        {
+            var projections = new[]
+            {
+                "topdown",
+                "isometric",
+            };
+            foreach (var projection in projections)
+            {
+                var report = RpgMapDataAudit.Check(document, projection, ObjectOf);
+                var issue = RpgDataPolicy.FirstBlocking(report.Issues);
+                if (issue == null)
+                {
+                    continue;
+                }
+
+                dataWidget.Show(report, true);
+                SetStatus(string.Format(ToolUi.Tr("tools/rpg_editor/data_save_blocked"),
+                    issue.Resource, issue.Field, RpgDataMessages.Explain(issue.Code)), ToolStatusKind.Error);
+                return false;
+            }
+
+            return true;
         }
 
         private void SelectDataIssue(RpgDataIssue issue)

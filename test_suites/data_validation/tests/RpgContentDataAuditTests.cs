@@ -7,6 +7,7 @@ using Cthangover.Core.Mods.Resolvers;
 using Cthangover.Core.Mods.Testing;
 using Cthangover.Core.Utils;
 using Cthangover.Mods.Rpg.Model;
+using Cthangover.Mods.Rpg.Validation;
 using Cthangover.Tools.EntityEditor;
 using Cthangover.Tools.Services;
 using Godot;
@@ -105,6 +106,39 @@ namespace Cthangover.Tools.RpgEditor.Tests.DataValidation
             var options = new JsonSerializerOptions { WriteIndented = true };
             File.WriteAllText(Path.Combine(directory, "content_inventory.json"), JsonSerializer.Serialize(reports, options));
             ctx.Log("Inventory rows=" + reports.Count + "; report=" + directory);
+            var catalog = new SortedDictionary<string, List<RpgDataIssue>>(StringComparer.Ordinal);
+            var images = new RpgValidationImages();
+            foreach (var projection in projections)
+            {
+                foreach (var value in objects.Values)
+                {
+                    var entry = new List<RpgDataIssue>();
+                    var explanation = ForeignEntities.Explain("rpg_object", value.ID);
+                    var source = value.ID;
+                    if (explanation?.Fields != null && explanation.Fields.TryGetValue("Id", out var origin))
+                    {
+                        source = origin.ModId + "/" + origin.File;
+                    }
+
+                    if (explanation?.Value != null)
+                    {
+                        foreach (var issue in RpgDataCheck.Authored(explanation.Value, projection, 0, images.Size))
+                        {
+                            issue.Resource = value.ID;
+                            issue.Source = source;
+                            issue.Projection = projection;
+                            issue.Context = "authored catalog";
+                            entry.Add(issue);
+                        }
+                    }
+
+                    entry.AddRange(RpgObjectDataAudit.Check(value, projection, 0, images, source));
+                    catalog.Add(projection + "/" + value.ID, entry);
+                }
+            }
+
+            File.WriteAllText(Path.Combine(directory, "object_catalog.json"), JsonSerializer.Serialize(catalog, options));
+            ctx.Log("Catalog object/projection pairs=" + catalog.Count + "; image decodes=" + images.Decoded);
         }
 
         private RpgObject ObjectOf(string id)
