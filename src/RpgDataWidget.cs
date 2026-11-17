@@ -1,11 +1,11 @@
-using System;
-using Cthangover.Mods.Interface.Base.Lists;
-using Cthangover.Mods.Rpg.Validation;
-using Cthangover.Tools.Common;
-using Godot;
-
 namespace Cthangover.Tools.RpgEditor
 {
+    using System;
+    using Cthangover.Mods.Interface.Base.Lists;
+    using Cthangover.Mods.Rpg.Validation;
+    using Cthangover.Tools.Common;
+    using Godot;
+
     /// <summary>Explicit, collapsible data audit; scene replacement marks the retained report stale without per-frame scanning.</summary>
     internal sealed partial class RpgDataWidget : ModWidget
     {

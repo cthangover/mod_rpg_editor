@@ -1,19 +1,20 @@
-using System;
-using System.IO;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Threading.Tasks;
-using Cthangover.Core.Localization;
-using Cthangover.Core.Mods.Testing;
-using Cthangover.Core.Settings;
-using Cthangover.Core.Utils;
-using Cthangover.Mods.Interface.Tool;
-using Cthangover.Mods.Interface.View;
-using Cthangover.Tools.Common;
-using Godot;
-
 namespace Cthangover.Tools.RpgEditor.Tests.DataValidation
 {
+    using System;
+    using System.IO;
+    using System.Text.Json;
+    using System.Text.Json.Nodes;
+    using System.Threading.Tasks;
+    using Cthangover.Core.Localization;
+    using Cthangover.Core.Mods.Testing;
+    using Cthangover.Core.Settings;
+    using Cthangover.Core.Utils;
+    using Cthangover.Mods.Interface.Tool;
+    using Cthangover.Mods.Interface.View;
+    using Cthangover.Mods.Rpg.Validation;
+    using Cthangover.Tools.Common;
+    using Godot;
+
     /// <summary>Drives the collapsible report, exact finding selection and stale-state lifecycle in a native utility window.</summary>
     public sealed class RpgDataGuiTests
     {
@@ -84,7 +85,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.DataValidation
                     var selected = -1;
                     for (var i = 0; i < report.Issues.Count; i++)
                     {
-                        if (report.Issues[i].Code == "vector" && report.Issues[i].Field == "Anchor")
+                        if (report.Issues[i].Code == RpgDataRules.Vector && report.Issues[i].Field == "Anchor")
                         {
                             selected = i;
                             break;

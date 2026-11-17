@@ -1,14 +1,14 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Threading.Tasks;
-using Cthangover.Core.Mods.Testing;
-using Cthangover.Core.Utils;
-using Cthangover.Mods.Interface.Tool;
-using Cthangover.Tools.Services;
-using Godot;
-
 namespace Cthangover.Tools.RpgEditor.Tests.DataValidation
 {
+    using System.Text.Json;
+    using System.Text.Json.Nodes;
+    using System.Threading.Tasks;
+    using Cthangover.Core.Mods.Testing;
+    using Cthangover.Core.Utils;
+    using Cthangover.Mods.Interface.Tool;
+    using Cthangover.Tools.Services;
+    using Godot;
+
     /// <summary>Save refuses before legend cleanup or writes, and valid unknown metadata survives save, reopen and one undo.</summary>
     public sealed class RpgMapSaveDataTests
     {

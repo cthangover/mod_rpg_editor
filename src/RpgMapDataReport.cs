@@ -1,8 +1,8 @@
-using System.Collections.Generic;
-using Cthangover.Mods.Rpg.Validation;
-
 namespace Cthangover.Tools.RpgEditor
 {
+    using System.Collections.Generic;
+    using Cthangover.Mods.Rpg.Validation;
+
     /// <summary>A serializable snapshot of bounded map checks; incomplete work is never described as an exhaustive audit.</summary>
     public sealed class RpgMapDataReport
     {

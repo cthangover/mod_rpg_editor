@@ -1,31 +1,31 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text.Json.Nodes;
-using Cthangover.Core.Events;
-using Cthangover.Core.Games;
-using Cthangover.Core.Mods;
-using Cthangover.Core.Mods.Resolvers;
-using Cthangover.Core.Scenes;
-using Cthangover.Core.UI.Theming;
-using Cthangover.Core.Utils;
-using Cthangover.Mods.Effects.Atmosphere;
-using Cthangover.Mods.Interface.Theming;
-using Cthangover.Mods.Interface.Tool;
-using Cthangover.Mods.Rpg;
-using Cthangover.Mods.Rpg.Model;
-using Cthangover.Mods.Rpg.Render;
-using Cthangover.Mods.Schemas;
-using Cthangover.Mods.TileRender;
-using Cthangover.Tools.Common;
-using Cthangover.Tools.EntityEditor;
-using Cthangover.Tools.Contracts;
-using Cthangover.Tools.Services;
-using Godot;
-
 namespace Cthangover.Tools.RpgEditor
 {
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Linq;
+    using System.Text.Json.Nodes;
+    using Cthangover.Core.Events;
+    using Cthangover.Core.Games;
+    using Cthangover.Core.Mods;
+    using Cthangover.Core.Mods.Resolvers;
+    using Cthangover.Core.Scenes;
+    using Cthangover.Core.UI.Theming;
+    using Cthangover.Core.Utils;
+    using Cthangover.Mods.Effects.Atmosphere;
+    using Cthangover.Mods.Interface.Theming;
+    using Cthangover.Mods.Interface.Tool;
+    using Cthangover.Mods.Rpg;
+    using Cthangover.Mods.Rpg.Model;
+    using Cthangover.Mods.Rpg.Render;
+    using Cthangover.Mods.Schemas;
+    using Cthangover.Mods.TileRender;
+    using Cthangover.Tools.Common;
+    using Cthangover.Tools.EntityEditor;
+    using Cthangover.Tools.Contracts;
+    using Cthangover.Tools.Services;
+    using Godot;
+
     /// <summary>
     /// The RPG map editor (plan 12.4) on the model v2: a palette of objects by shape, the map canvas in the game's own
     /// projections (switchable while editing), selection and moves of placements, the map's properties, teleport links,

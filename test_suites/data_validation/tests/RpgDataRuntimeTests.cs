@@ -1,16 +1,17 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Cthangover.Core.Mods.Testing;
-using Cthangover.Core.Utils;
-using Cthangover.Mods.Interface.View;
-using Cthangover.Mods.Rpg.Model;
-using Cthangover.Mods.Rpg.Render;
-using Cthangover.Mods.TileRender;
-using Godot;
-
 namespace Cthangover.Tools.RpgEditor.Tests.DataValidation
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Threading.Tasks;
+    using Cthangover.Core.Mods.Testing;
+    using Cthangover.Core.Utils;
+    using Cthangover.Mods.Interface.View;
+    using Cthangover.Mods.Rpg.Model;
+    using Cthangover.Mods.Rpg.Render;
+    using Cthangover.Mods.Rpg.Validation;
+    using Cthangover.Mods.TileRender;
+    using Godot;
+
     /// <summary>One malformed external quad is diagnosed and quarantined while its valid neighbour still produces native pixels.</summary>
     public sealed class RpgDataRuntimeTests
     {
@@ -105,7 +106,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.DataValidation
                 ModAssert.Equal(1, scene.Visuals.Count, "only the malformed part is removed before rendering");
                 ModAssert.Equal(source.ID + "#good", scene.Visuals[0].Id, "the original valid neighbour is retained");
                 ModAssert.Equal(1, scene.Warnings.Count, "the render scene exposes the rejected part");
-                ModAssert.True(scene.Warnings[0].Contains("quad_number"), "the rejection names its numeric cause");
+                ModAssert.True(scene.Warnings[0].Contains(RpgDataRules.QuadNumber), "the rejection names its numeric cause");
                 ModAssert.Equal(1, errors.Count, "exactly one intentional external-data error is logged");
                 ModAssert.True(errors[0].Contains("bad_quad") && errors[0].Contains("part skipped"),
                     "the error identifies the skipped part rather than silently hiding it");

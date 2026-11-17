@@ -1,14 +1,14 @@
-using System;
-using System.Collections.Generic;
-using System.Text.Json;
-using Cthangover.Core.Utils;
-using Cthangover.Mods.Rpg.Model;
-using Cthangover.Mods.Rpg.Validation;
-using Cthangover.Tools.Services;
-using Cthangover.Tools.EntityEditor;
-
 namespace Cthangover.Tools.RpgEditor
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Text.Json;
+    using Cthangover.Core.Utils;
+    using Cthangover.Mods.Rpg.Model;
+    using Cthangover.Mods.Rpg.Validation;
+    using Cthangover.Tools.Services;
+    using Cthangover.Tools.EntityEditor;
+
     /// <summary>Audits unsaved map/placement data with the normal effective-object resolver and no live gameplay state.</summary>
     public sealed class RpgMapDataAudit
     {
@@ -60,7 +60,7 @@ namespace Cthangover.Tools.RpgEditor
                 result.Complete = false;
                 Add(new RpgDataIssue
                 {
-                    Code = "budget",
+                    Code = RpgDataRules.Budget,
                     Field = "Width/Height",
                     Resource = document.MapId,
                     Source = MapSource(),
@@ -88,7 +88,7 @@ namespace Cthangover.Tools.RpgEditor
                 result.Complete = false;
                 Add(new RpgDataIssue
                 {
-                    Code = "json",
+                    Code = RpgDataRules.Json,
                     Field = error.Path ?? "$",
                     Detail = error.Message,
                     Resource = document.MapId,
@@ -150,7 +150,7 @@ namespace Cthangover.Tools.RpgEditor
             {
                 Add(new RpgDataIssue
                 {
-                    Code = "reference",
+                    Code = RpgDataRules.Reference,
                     Field = field,
                     Resource = id,
                     Placement = placement?.ID,
@@ -166,7 +166,7 @@ namespace Cthangover.Tools.RpgEditor
             {
                 Add(new RpgDataIssue
                 {
-                    Code = "layer_form",
+                    Code = RpgDataRules.LayerForm,
                     Field = field,
                     Resource = id,
                     Placement = placement?.ID,

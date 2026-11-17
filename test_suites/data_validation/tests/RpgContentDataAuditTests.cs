@@ -1,19 +1,19 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using Cthangover.Core.Mods.Resolvers;
-using Cthangover.Core.Mods.Testing;
-using Cthangover.Core.Utils;
-using Cthangover.Mods.Rpg.Model;
-using Cthangover.Mods.Rpg.Validation;
-using Cthangover.Tools.EntityEditor;
-using Cthangover.Tools.Services;
-using Godot;
-
 namespace Cthangover.Tools.RpgEditor.Tests.DataValidation
 {
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Text.Json;
+    using System.Text.Json.Nodes;
+    using Cthangover.Core.Mods.Resolvers;
+    using Cthangover.Core.Mods.Testing;
+    using Cthangover.Core.Utils;
+    using Cthangover.Mods.Rpg.Model;
+    using Cthangover.Mods.Rpg.Validation;
+    using Cthangover.Tools.EntityEditor;
+    using Cthangover.Tools.Services;
+    using Godot;
+
     /// <summary>
     /// Inventories existing loaded maps in both projections; findings remain evidence rather than passing-content assertions.
     /// </summary>
@@ -163,7 +163,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.DataValidation
             };
             source.Issues.Add(new Cthangover.Mods.Rpg.Validation.RpgDataIssue
             {
-                Code = "budget",
+                Code = RpgDataRules.Budget,
                 Field = "Width/Height",
                 Uses = 1,
             });
@@ -174,7 +174,7 @@ namespace Cthangover.Tools.RpgEditor.Tests.DataValidation
             ModAssert.Equal(source.ImagesDecoded, restored.ImagesDecoded, "decode count survives JSON");
             ModAssert.Equal(source.UnusedLegendEntries, restored.UnusedLegendEntries, "unused references remain distinct");
             ModAssert.Equal(1, restored.Issues.Count, "nested findings survive JSON");
-            ModAssert.Equal("budget", restored.Issues[0].Code, "nested rule survives JSON");
+            ModAssert.Equal(RpgDataRules.Budget, restored.Issues[0].Code, "nested rule survives JSON");
             ModAssert.Equal(json, JsonSerializer.Serialize(restored), "complete report round trip is lossless");
         }
     }

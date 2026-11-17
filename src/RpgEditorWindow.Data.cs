@@ -1,10 +1,10 @@
-using Cthangover.Mods.Rpg.Validation;
-using Cthangover.Mods.Interface.Tool;
-using Cthangover.Tools.Common;
-using Godot;
-
 namespace Cthangover.Tools.RpgEditor
 {
+    using Cthangover.Mods.Rpg.Validation;
+    using Cthangover.Mods.Interface.Tool;
+    using Cthangover.Tools.Common;
+    using Godot;
+
     /// <summary>Connects structural checks to the unsaved document; it shares the ordinary selection and geometry overlay.</summary>
     public partial class RpgEditorWindow
     {

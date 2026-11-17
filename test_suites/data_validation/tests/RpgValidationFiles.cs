@@ -1,11 +1,11 @@
-using System;
-using System.Collections.Generic;
-using Cthangover.Core.Mods;
-using Cthangover.Core.Mods.Resolvers;
-using Cthangover.Tools.Services;
-
 namespace Cthangover.Tools.RpgEditor.Tests.DataValidation
 {
+    using System;
+    using System.Collections.Generic;
+    using Cthangover.Core.Mods;
+    using Cthangover.Core.Mods.Resolvers;
+    using Cthangover.Tools.Services;
+
     /// <summary>Restores only named fixture files and resolver snapshots after native save tests, including exceptional exits.</summary>
     internal sealed class RpgValidationFiles : IDisposable
     {

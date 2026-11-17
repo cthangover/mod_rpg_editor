@@ -1,17 +1,17 @@
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using Cthangover.Core.Mods.Resolvers;
-using Cthangover.Core.Mods.Testing;
-using Cthangover.Core.Utils;
-using Cthangover.Mods.Rpg.Model;
-using Godot;
-
 namespace Cthangover.Tools.RpgEditor.Tests.DataValidation
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.IO;
+    using System.Text.Json;
+    using System.Text.Json.Nodes;
+    using Cthangover.Core.Mods.Resolvers;
+    using Cthangover.Core.Mods.Testing;
+    using Cthangover.Core.Utils;
+    using Cthangover.Mods.Rpg.Model;
+    using Godot;
+
     /// <summary>Records the owner's 128×128 and twenty-NPC workload; the audit caches dimensions rather than retained GPU images.</summary>
     public sealed class RpgDataLoadTests
     {

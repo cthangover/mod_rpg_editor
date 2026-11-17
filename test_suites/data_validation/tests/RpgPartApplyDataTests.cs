@@ -1,17 +1,17 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Threading.Tasks;
-using Cthangover.Core.Localization;
-using Cthangover.Core.Mods.Resolvers;
-using Cthangover.Core.Mods.Testing;
-using Cthangover.Core.Utils;
-using Cthangover.Mods.Interface.Tool;
-using Cthangover.Mods.Rpg.Model;
-using Cthangover.Tools.RpgObjectEditor;
-using Godot;
-
 namespace Cthangover.Tools.RpgEditor.Tests.DataValidation
 {
+    using System.Text.Json;
+    using System.Text.Json.Nodes;
+    using System.Threading.Tasks;
+    using Cthangover.Core.Localization;
+    using Cthangover.Core.Mods.Resolvers;
+    using Cthangover.Core.Mods.Testing;
+    using Cthangover.Core.Utils;
+    using Cthangover.Mods.Interface.Tool;
+    using Cthangover.Mods.Rpg.Model;
+    using Cthangover.Tools.RpgObjectEditor;
+    using Godot;
+
     /// <summary>
     /// Nonfinite input stays editable; corrected candidates publish detached data without changing their source.
     /// </summary>
