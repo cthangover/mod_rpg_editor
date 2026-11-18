@@ -179,7 +179,7 @@ namespace Cthangover.Tools.RpgEditor
         public RpgEditorWindow() : base("tools/rpg_editor/title")
         {
             builder = new RpgRenderSceneBuilder(textures.Image, textures.Charset);
-            objectTable = Entities.Collect<RpgObject>();
+            objectTable = Entities.Collect<RpgObject>(required: false);
             encountersShown = ModManager.Instance?.GetMod(BattlesIntegration) != null;
             BuildUi();
             ModEventBus.Subscribe<EntitiesSavedEvent>(OnEntitiesSaved);
@@ -749,7 +749,7 @@ namespace Cthangover.Tools.RpgEditor
         private void OpenFile(string mod, string path)
         {
             CloseDocument();
-            objectTable = Entities.Collect<RpgObject>();
+            objectTable = Entities.Collect<RpgObject>(required: false);
             if (mod == null || path == null)
             {
                 SetStatus(ToolUi.Tr("tools/rpg_editor/no_map"), ToolStatusKind.Info);

@@ -156,7 +156,7 @@ namespace Cthangover.Tools.RpgEditor
             }
 
             characterRows.Clear();
-            foreach (var pair in Entities.Collect<CharacterInfo>())
+            foreach (var pair in Entities.Collect<CharacterInfo>(required: false))
             {
                 var sheet = RpgPlayerLook.CharsetOfId(pair.Key);
                 if (sheet != null)

@@ -34,7 +34,7 @@ namespace Cthangover.Tools.RpgEditor
 
             if (evt.Kind == "rpg_object")
             {
-                objectTable = Entities.Collect<RpgObject>();
+                objectTable = Entities.Collect<RpgObject>(required: false);
                 palette?.Rebuild(objectTable);
                 RebuildScene();
             }
