@@ -9,7 +9,6 @@ namespace Cthangover.Tools.RpgEditor
     using Cthangover.Core.Games;
     using Cthangover.Core.Mods;
     using Cthangover.Core.Mods.Resolvers;
-    using Cthangover.Core.Scenes;
     using Cthangover.Core.UI.Theming;
     using Cthangover.Core.Utils;
     using Cthangover.Mods.Effects.Atmosphere;
@@ -18,7 +17,6 @@ namespace Cthangover.Tools.RpgEditor
     using Cthangover.Mods.Rpg;
     using Cthangover.Mods.Rpg.Model;
     using Cthangover.Mods.Rpg.Render;
-    using Cthangover.Mods.Schemas;
     using Cthangover.Mods.TileRender;
     using Cthangover.Tools.Common;
     using Cthangover.Tools.EntityEditor;
@@ -32,24 +30,16 @@ namespace Cthangover.Tools.RpgEditor
     /// and — when <c>rpg__battles</c> is mounted — the encounters. Every change goes through <see cref="RpgMapDocument"/>,
     /// so undo and redo (Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z) and the byte-stable save are the document's. Ctrl+S saves.
     /// <para/>
-    /// A new map is made with the file selector's "+": it is written on the first save with its scene file, so the running
-    /// game knows the map at once (<see cref="SceneManager.ReloadContent"/>).
+    /// A new map is made with the file selector's "+" or with the location creator (the "rpg_map_creator" entry of the
+    /// tools menu): a new map is written with its scene file, so the running game knows the map at once.
     /// </summary>
     public partial class RpgEditorWindow : ToolWindow, IMapPickupEditor, IAtmosphereMaskEditor
     {
         private const string Category = "RPG_EDITOR";
 
-        private const string MapDir = "maps";
-
-        private const string MapExtension = ".json";
-
         private const string BattlesIntegration = "rpg__battles";
 
         private const string TestSuites = "test_suites/";
-
-        private const int NewWidth = 16;
-
-        private const int NewHeight = 12;
 
         private static readonly Color PaintFill = new(0.55f, 0.85f, 1f, 0.45f);
 
@@ -797,26 +787,8 @@ namespace Cthangover.Tools.RpgEditor
 
         private (RpgMapDocument Document, bool New)? CreateDocument(string mod, string path, string id)
         {
-            var template = new JsonObject
-            {
-                ["Id"] = id,
-                ["Width"] = NewWidth,
-                ["Height"] = NewHeight,
-                ["Zoom"] = 2,
-                ["Spawn"] = new JsonObject
-                {
-                    ["X"] = 1,
-                    ["Y"] = 1,
-                    ["Dir"] = "Down"
-                },
-                ["Legend"] = new JsonObject(),
-            };
             var files = OwnFiles(mod).ToList();
-            files.Add((path, EntityDocument.Serialize(new JsonObject
-            {
-                ["Kind"] = "rpg_map",
-                ["Items"] = new JsonArray(template)
-            })));
+            files.Add((path, RpgMapTemplate.FileText(id, RpgMapTemplate.DefaultWidth, RpgMapTemplate.DefaultHeight, atmosphere: null)));
             var doc = RpgMapDocument.Open(id, mod, files, ForeignOf("rpg_map", mod), ForeignOf("rpg_placement", mod), BaseOf(mod), FormOf);
             return doc == null ? null : (doc, true);
         }
@@ -899,23 +871,7 @@ namespace Cthangover.Tools.RpgEditor
         /// <summary>The writable mod and the path of a map file with this id, or null.</summary>
         private static (string Mod, string Path)? FindMapFile(string mapId)
         {
-            if (string.IsNullOrEmpty(mapId))
-            {
-                return null;
-            }
-
-            foreach (var mod in ModFileService.ListWritableMods())
-            {
-                foreach (var path in ModFileService.ListFiles(mod, MapDir, MapExtension))
-                {
-                    if (Path.GetFileNameWithoutExtension(path) == mapId)
-                    {
-                        return (mod, path);
-                    }
-                }
-            }
-
-            return null;
+            return RpgMapFiles.FindFile(mapId);
         }
 
         /// <summary>
@@ -965,7 +921,7 @@ namespace Cthangover.Tools.RpgEditor
 
             if (isNewMap)
             {
-                WriteSceneOf(document.MapId);
+                RpgMapFiles.WriteScene(modId, document.MapId);
             }
 
             // Objects of other mods (painted surfaces, placed sprites) and the scenarios, maps, items and shops that the
@@ -1003,48 +959,14 @@ namespace Cthangover.Tools.RpgEditor
             document.MarkSaved();
             isNewMap = false;
             MarkClean();
-            ClearCaches();
-            // The teleport pickers list the maps of the game from this index: a new map must be in it at once (plan 14.G18).
-            GameEntityIndex.Refresh();
-            SceneManager.ReloadContent();
+            // The caches, the entity index and the scene content are refreshed together: the teleport pickers list the
+            // maps of the game from this index, so a new map must be in it at once (plan 14.G18).
+            RpgMapFiles.RefreshGameData();
             GameLogger.Log(Category, $"saved map '{document.MapId}' of '{modId}': {files.Count} file(s)");
             var savedText = string.Format(ToolUi.Tr("tools/rpg_editor/status_saved"), document.MapId, files.Count);
             SetStatus(added.Count == 0 ? savedText : savedText + " " + ModDependencies.Notice(added), ToolStatusKind.Ok);
             UpdateButtons();
             return true;
-        }
-
-        private void WriteSceneOf(string mapId)
-        {
-            var scenePath = SceneFileEntry.PathFor(mapId);
-            if (ModFileService.ReadText(modId, scenePath) != null)
-            {
-                return;
-            }
-
-            var backgrounds = ModResourceService.GetBackgroundIds();
-            var entry = new SceneFileEntry
-            {
-                ModId = modId,
-                RelativePath = scenePath,
-                Name = mapId
-            };
-            if (backgrounds.Count > 0)
-            {
-                entry.Backgrounds.Add(backgrounds[0]);
-            }
-
-            if (!SceneFileService.Write(entry))
-            {
-                GameLogger.Log(Category, $"scene '{mapId}' of '{modId}' could not be written", LogLevel.Error);
-            }
-        }
-
-        private static void ClearCaches()
-        {
-            ModManager.Instance.GetResolver<PatchResolver>()?.ClearCache();
-            ModManager.Instance.GetResolver<EntityResolver>()?.ClearCache();
-            ModManager.Instance.GetResolver<FileListResolver>()?.ClearCache();
         }
 
         // ── changes ────────────────────────────────────────────────
