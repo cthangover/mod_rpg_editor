@@ -4,6 +4,8 @@ using Godot;
 
 namespace Cthangover.Tools.RpgEditor.Tests.Palette
 {
+    using Cthangover.Core.Mods.Memory;
+
     /// <summary>
     /// Full-size map/ghost borrowers survive pressure; only detached inactive sources may be released.
     /// </summary>
@@ -31,6 +33,13 @@ namespace Cthangover.Tools.RpgEditor.Tests.Palette
             cache.EndScene();
             ModAssert.Equal(1600, cache.PinnedBytes, "the successful generation replaces the old pin set");
             ModAssert.Equal(1600, cache.CachedBytes, "only unpinned replacement input is evicted");
+            var metrics = cache.GetMetrics();
+            ModAssert.Null(metrics.EstimatedPayloadBytes);
+            ModAssert.Equal(1600L, metrics.EstimatedResourceBytes.Value);
+            ModAssert.Equal(1L, metrics.Cache.Value.Evictions.Value);
+            ModAssert.Equal(1L, metrics.Cache.Value.Hits.Value);
+            ModAssert.Equal(2L, metrics.Cache.Value.Misses.Value);
+            ((ICache)cache).Clear();
             ModAssert.True(GodotObject.IsInstanceValid(red), "committed source remains borrowed safely");
             ModAssert.False(GodotObject.IsInstanceValid(blue), "unused draft source is released after the successful swap");
         }

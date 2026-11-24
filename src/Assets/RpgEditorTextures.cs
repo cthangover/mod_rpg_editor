@@ -7,13 +7,15 @@ using Godot;
 
 namespace Cthangover.Tools.RpgEditor
 {
+    using Cthangover.Core.Mods.Memory;
+
     /// <summary>
     /// Editor-only full-size picture cache. A successful scene rebuild pins its requested images;
     /// EndScene runs after the previous canvas is detached and evicts only inactive LRU entries.
     /// Current scene/ghost/drag textures may exceed the budget: active data is never freed under a
     /// renderer. Byte counts conservatively use RGBA8 dimensions, excluding builder-owned ground.
     /// </summary>
-    public sealed class RpgEditorTextures : IDisposable
+    public sealed class RpgEditorTextures : IDisposable, ICache
     {
         /// <summary>
         /// Total retained source-image target; current scene and previews remain pinned if they exceed it.
@@ -33,6 +35,11 @@ namespace Cthangover.Tools.RpgEditor
         private string previewScope;
 
         private long clock;
+        private readonly ModMemoryScope memory;
+        private readonly string storageName;
+        private long hits;
+        private long misses;
+        private long evictions;
 
         /// <summary>Cache retention limit; active scene and preview images are pinned outside eviction.</summary>
         public long BudgetBytes { get; }
@@ -76,6 +83,8 @@ namespace Cthangover.Tools.RpgEditor
             }
 
             BudgetBytes = budgetBytes;
+            memory = ModMemoryService.Shared.TryFor(typeof(RpgEditorTextures).Assembly);
+            storageName = memory?.TrackInstance("editor_textures", this);
         }
 
         /// <summary>Borrowed object image; calls between BeginScene/EndScene pin the next scene's data.</summary>
@@ -127,10 +136,8 @@ namespace Cthangover.Tools.RpgEditor
                     break;
                 }
 
-                var entry = entries[oldest];
-                entries.Remove(oldest);
-                CachedBytes -= entry.Bytes;
-                entry.Owner.Dispose();
+                Drop(oldest);
+                evictions++;
             }
         }
 
@@ -191,6 +198,42 @@ namespace Cthangover.Tools.RpgEditor
 
             entries.Clear();
             CachedBytes = 0;
+            memory?.Untrack(storageName, this);
+        }
+
+        /// <summary>Reports owned source textures and their RGBA8 estimate on the editor thread.</summary>
+        public StorageMetrics GetMetrics()
+            => new(entries.Count, entries.Capacity, null, new CacheMetrics(hits, misses, evictions, null, null, BudgetBytes), CachedBytes);
+
+        /// <summary>Lists source keys with their estimated size and whether a scene or preview pins them.</summary>
+        public IReadOnlyList<MemoryPreviewEntry> ReadPreview(int offset, int limit)
+        {
+            var rows = new List<MemoryPreviewEntry>();
+            foreach (var pair in entries)
+            {
+                if (offset-- > 0)
+                    continue;
+                rows.Add(new MemoryPreviewEntry(pair.Key,
+                    FormattableString.Invariant($"bytes={pair.Value.Bytes}, pinned={IsPinned(pair.Key)}")));
+                if (rows.Count == limit)
+                    break;
+            }
+            return rows;
+        }
+
+        void ICache.Clear()
+        {
+            foreach (var key in new List<string>(entries.Keys))
+                if (!IsPinned(key))
+                    Drop(key);
+        }
+
+        private void Drop(string key)
+        {
+            var entry = entries[key];
+            entries.Remove(key);
+            CachedBytes -= entry.Bytes;
+            entry.Owner.Dispose();
         }
 
         private bool IsPinned(string key)
@@ -230,10 +273,12 @@ namespace Cthangover.Tools.RpgEditor
 
             if (entries.TryGetValue(key, out var entry))
             {
+                hits++;
                 entries[key] = (entry.Owner, entry.Texture, entry.Bytes, ++clock);
                 return entry.Texture;
             }
 
+            misses++;
             var owner = new TileAssetCache();
             Texture2D texture;
             try

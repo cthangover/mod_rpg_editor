@@ -12,12 +12,14 @@ using Godot;
 
 namespace Cthangover.Tools.RpgEditor
 {
+    using Cthangover.Core.Mods.Memory;
+
     /// <summary>
     /// Owns small RGBA8 palette textures, never GPU copies of full sheets. Visible rows borrow them;
     /// detach old row icons before SetVisible changes the pins. Only unpinned LRU entries are evicted.
     /// If visible rows alone exceed the budget, further rows remain selectable without an icon.
     /// </summary>
-    public sealed class RpgEditorThumbnails : IDisposable
+    public sealed class RpgEditorThumbnails : IDisposable, ICache
     {
         /// <summary>Default cap for derived RGBA8 miniatures; authored source images are never retained here.</summary>
         public const long DefaultBudgetBytes = 8 * 1024 * 1024;
@@ -27,6 +29,11 @@ namespace Cthangover.Tools.RpgEditor
         private readonly HashSet<string> visible = new(StringComparer.Ordinal);
 
         private long clock;
+        private readonly ModMemoryScope memory;
+        private readonly string storageName;
+        private long hits;
+        private long misses;
+        private long evictions;
 
         /// <summary>Maximum retained miniature pixel bytes; does not include temporary CPU decode buffers.</summary>
         public long BudgetBytes { get; }
@@ -60,6 +67,8 @@ namespace Cthangover.Tools.RpgEditor
             }
 
             BudgetBytes = budgetBytes;
+            memory = ModMemoryService.Shared.TryFor(typeof(RpgEditorThumbnails).Assembly);
+            storageName = memory?.TrackInstance("editor_thumbnails", this);
         }
 
         /// <summary>Replaces the row pins after the previous list has detached every borrowed icon.</summary>
@@ -91,10 +100,12 @@ namespace Cthangover.Tools.RpgEditor
 
             if (entries.TryGetValue(key, out var found))
             {
+                hits++;
                 entries[key] = (found.Texture, found.Bytes, ++clock);
                 return found.Texture;
             }
 
+            misses++;
             var actor = obj.Form == RpgObjectForm.Actor;
             var path = PathOf(obj);
             DecodeCount++;
@@ -170,6 +181,42 @@ namespace Cthangover.Tools.RpgEditor
         public void Dispose()
         {
             Clear();
+            memory?.Untrack(storageName, this);
+        }
+
+        /// <summary>Reports the uploaded RGBA8 estimate and policy evictions on the editor thread.</summary>
+        public StorageMetrics GetMetrics()
+            => new(entries.Count, entries.Capacity, null, new CacheMetrics(hits, misses, evictions, null, null, BudgetBytes), CachedBytes);
+
+        /// <summary>Lists miniature keys with their estimated size and palette pin status.</summary>
+        public IReadOnlyList<MemoryPreviewEntry> ReadPreview(int offset, int limit)
+        {
+            var rows = new List<MemoryPreviewEntry>();
+            foreach (var pair in entries)
+            {
+                if (offset-- > 0)
+                    continue;
+                rows.Add(new MemoryPreviewEntry(pair.Key,
+                    FormattableString.Invariant($"bytes={pair.Value.Bytes}, pinned={visible.Contains(pair.Key)}")));
+                if (rows.Count == limit)
+                    break;
+            }
+            return rows;
+        }
+
+        void ICache.Clear()
+        {
+            foreach (var key in new List<string>(entries.Keys))
+                if (!visible.Contains(key))
+                    Drop(key);
+        }
+
+        private void Drop(string key)
+        {
+            var entry = entries[key];
+            entries.Remove(key);
+            CachedBytes -= entry.Bytes;
+            entry.Texture.Dispose();
         }
 
         private bool MakeRoom(long bytes)
@@ -192,10 +239,8 @@ namespace Cthangover.Tools.RpgEditor
                     return false;
                 }
 
-                var entry = entries[oldest];
-                entries.Remove(oldest);
-                CachedBytes -= entry.Bytes;
-                entry.Texture.Dispose();
+                Drop(oldest);
+                evictions++;
             }
 
             return true;
